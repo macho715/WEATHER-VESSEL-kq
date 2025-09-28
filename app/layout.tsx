@@ -3,6 +3,9 @@ import type { Metadata } from "next"
 import { Suspense } from "react"
 import "./globals.css"
 
+const geist = V0_Font_Geist({ weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"] })
+const geistMono = V0_Font_Geist_Mono({ weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"] })
+const sourceSerif = V0_Font_Source_Serif_4({ weight: ["200", "300", "400", "500", "600", "700", "800", "900"] })
 import { Geist as V0_Font_Geist, Geist_Mono as V0_Font_Geist_Mono, Source_Serif_4 as V0_Font_Source_Serif_4 } from 'next/font/google'
 
 // Initialize fonts
@@ -23,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${geist.variable} ${geistMono.variable} ${sourceSerif.variable}`}>
       <body className="font-sans antialiased">
         <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
       </body>
