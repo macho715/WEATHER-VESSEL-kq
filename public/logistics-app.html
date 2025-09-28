@@ -40,7 +40,7 @@
      onfocus="this.style.position='static';this.style.width='auto';this.style.height='auto';this.style.padding='0.5rem 0.75rem';this.style.background='#0ea5e9';this.style.color='#000';this.style.borderRadius='8px';">
      Skip to main content
   </a>
-  <main id="main" class="grid grid-cols-1 lg:grid-cols-5 gap-4 h-[95vh]" role="main" aria-live="polite">
+  <main id="main" class="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-[95vh]" role="main" aria-live="polite">
     <div id="map" class="lg:col-span-3 rounded-xl shadow-xl border border-slate-700 h-full min-h-[400px]" 
          role="img" aria-label="Vessel tracking map showing route from MW4 to AGI" tabindex="0"></div>
 
@@ -243,8 +243,13 @@
 
       const vesselIcon = L.icon({iconUrl:'https://i.imgur.com/G4Am98f.png', iconSize:[35,35]});
       const vesselData = {
-        name:"JOPETWIL 71", imo:"9582829", mmsi:"470486000",
-        route:[]
+        name: "JOPETWIL 71",
+        imo: "9582829",
+        mmsi: "470486000",
+        status: "Ready @ MW4",
+        currentVoyageId: null,
+        progress: 0,
+        route: []
       };
       vesselData.route = [
         [24.3400,54.4500], [24.4300,54.4300], [24.4700,54.3900],
@@ -265,11 +270,13 @@
       const linkageBadge = document.getElementById('linkage-badge');
       simSpeedBadge.textContent = '×4.00';
 
-      let voyageSchedule = [
+      const defaultVoyageSchedule = [
         { id:"69th", cargo:"Dune Sand",  etd:"2025-09-28T16:00:00Z", eta:"2025-09-29T04:00:00Z", status:"Scheduled" },
         { id:"70th", cargo:"10mm Agg.",  etd:"2025-09-30T16:00:00Z", eta:"2025-10-01T04:00:00Z", status:"Scheduled" },
         { id:"71st", cargo:"5mm Agg.",   etd:"2025-10-02T16:00:00Z", eta:"2025-10-03T04:00:00Z", status:"Scheduled" }
       ];
+
+      let voyageSchedule = defaultVoyageSchedule.map(v => ({ ...v }));
 
       let weatherWindows = [];
 
@@ -308,6 +315,31 @@
       const assistantModelSelect = document.getElementById('assistant-model');
       let assistantHistory = [];
       let pendingAttachments = [];
+      const SIM_TICK_MS = 1000;
+      let simulationHandle = null;
+
+      const marineDataCache = new Map();
+      const MARINE_CACHE_TTL_MS = 10 * 60 * 1000;
+      let userInteractingWithSchedule = false;
+      let scheduleInteractionResetTimer = null;
+      let lastAutoScrolledVoyageId = null;
+
+      const markScheduleInteraction = () => {
+        userInteractingWithSchedule = true;
+        if (scheduleInteractionResetTimer) {
+          clearTimeout(scheduleInteractionResetTimer);
+        }
+        scheduleInteractionResetTimer = setTimeout(() => {
+          userInteractingWithSchedule = false;
+          scheduleInteractionResetTimer = null;
+        }, 8000);
+      };
+
+      ['wheel', 'touchstart', 'touchmove', 'pointerdown', 'keydown', 'scroll'].forEach(eventName => {
+        scheduleContainer?.addEventListener(eventName, markScheduleInteraction, {
+          passive: eventName === 'wheel' || eventName.startsWith('touch')
+        });
+      });
 
       function updateInfoPanel(){
         const cur=vesselData.currentVoyageId||'N/A';
@@ -323,18 +355,11 @@
       async function renderSchedule(){
         const scheduleBody = document.getElementById('schedule-body');
         if (!scheduleBody) return;
-        
+
         document.getElementById('schedule-container').setAttribute('aria-busy','true');
         scheduleBody.innerHTML = '';
-        
-        const marineDataCache = new Map();
-        
-        // Pre-fetch marine data once for all voyages
-        if (!marineDataCache.has('Jebel Ali')) {
-          const snap = await updateMarineForLeg('Jebel Ali');
-          marineDataCache.set('Jebel Ali', snap);
-        }
-        const cachedSnap = marineDataCache.get('Jebel Ali');
+
+        const cachedSnap = await getMarineSnapshot('Jebel Ali');
         
         for (let index = 0; index < voyageSchedule.length; index += 1) {
           const v = voyageSchedule[index];
@@ -371,9 +396,18 @@
         
         document.getElementById('schedule-container').setAttribute('aria-busy','false');
 
-        if(vesselData.currentVoyageId){
-          const row=document.getElementById(`voyage-${vesselData.currentVoyageId}`);
-          if(row) row.scrollIntoView({block:'center',behavior:'smooth'});
+        if (vesselData.currentVoyageId) {
+          const row = document.getElementById(`voyage-${vesselData.currentVoyageId}`);
+          if (row) {
+            const voyageChanged = vesselData.currentVoyageId !== lastAutoScrolledVoyageId;
+            if (voyageChanged || !userInteractingWithSchedule) {
+              row.scrollIntoView({
+                block: 'center',
+                behavior: lastAutoScrolledVoyageId ? 'smooth' : 'auto'
+              });
+              lastAutoScrolledVoyageId = vesselData.currentVoyageId;
+            }
+          }
         }
       }
 
@@ -458,7 +492,7 @@
         }else{
           setInfo('날씨 연동됨. 변경 사항 없음.');
         }
-        renderSchedule();
+        renderSchedule().catch(err => console.error(err));
       }
 
       function chooseActiveVoyage(now){
@@ -495,10 +529,24 @@
               }, 4000);
             }
           }
+        } else {
+          vesselData.currentVoyageId = null;
+          vesselData.status = "Ready @ MW4";
         }
 
         updateInfoPanel();
-        renderSchedule();
+        renderSchedule().catch(err => console.error(err));
+      }
+
+      function startSimulationLoop() {
+        if (simulationHandle) return;
+        simulationHandle = window.setInterval(runSimulation, SIM_TICK_MS);
+      }
+
+      function stopSimulationLoop() {
+        if (!simulationHandle) return;
+        clearInterval(simulationHandle);
+        simulationHandle = null;
       }
 
       const scheduleInput = document.getElementById('file-schedule');
@@ -536,7 +584,7 @@
             voyageSchedule = normalized.sort((a,b)=> +new Date(a.etd)-+new Date(b.etd));
             scheduleLabel.textContent = `Loaded: ${f.name}`;
             setInfo(`스케줄 ${normalized.length}건 로드 완료.`, 'info');
-            renderSchedule();
+            renderSchedule().catch(err => console.error(err));
           }catch(err){
             console.error(err);
             setInfo(`⚠️ 스케줄 파일 오류: ${err.message}`, 'danger');
@@ -614,6 +662,12 @@
         pendingAttachments = Array.from(event.target.files || []);
         renderAttachmentList();
       });
+
+      const initializeDashboard = () => {
+        timeDisplay.textContent = toLocal(currentSimDate);
+        updateInfoPanel();
+        renderSchedule().catch(err => console.error(err));
+      };
 
       document.getElementById('assistant-reset').addEventListener('click', ()=> {
         assistantHistory = [];
@@ -716,6 +770,15 @@
         currentSimDate = new Date("2025-09-28T12:00:00Z");
         vesselData.currentVoyageId = null;
         vesselData.status = "Ready @ MW4";
+        voyageSchedule = defaultVoyageSchedule.map(v => ({ ...v }));
+        weatherWindows = [];
+        weatherLinked = false;
+        linkageBadge.textContent = 'Linked to Weather: OFF';
+        scheduleLabel.textContent = 'Upload Schedule (CSV/JSON)';
+        weatherLabel.textContent = 'Upload Weather (CSV)';
+        lastAutoScrolledVoyageId = null;
+        scheduleContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+        initializeDashboard();
         setInfo('시뮬레이션 시계가 초기화되었습니다.');
       });
 
@@ -729,6 +792,41 @@
           marineBadge.textContent = `Marine: n/a`;
         }
         return snap;
+      }
+
+      async function getMarineSnapshot(portName) {
+        const cached = marineDataCache.get(portName);
+        const now = Date.now();
+        if (cached?.inFlight) {
+          return cached.inFlight;
+        }
+        if (cached && now - cached.fetchedAt < MARINE_CACHE_TTL_MS) {
+          return cached.snapshot;
+        }
+        const inFlight = updateMarineForLeg(portName)
+          .then(snap => {
+            marineDataCache.set(portName, {
+              snapshot: snap,
+              fetchedAt: Date.now(),
+              inFlight: null
+            });
+            return snap;
+          })
+          .catch(err => {
+            console.error(err);
+            if (cached) {
+              marineDataCache.set(portName, { ...cached, inFlight: null });
+              return cached.snapshot ?? null;
+            }
+            marineDataCache.delete(portName);
+            return null;
+          });
+        marineDataCache.set(portName, {
+          snapshot: cached?.snapshot ?? null,
+          fetchedAt: cached?.fetchedAt ?? 0,
+          inFlight
+        });
+        return inFlight;
       }
 
       // ===== Worker 생성 (Blob URL) : IOI 계산 + Marine fetch 오프로드 =====
@@ -792,6 +890,24 @@
 
         });
       }
+
+      initializeDashboard();
+      startSimulationLoop();
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          stopSimulationLoop();
+        } else {
+          timeDisplay.textContent = toLocal(currentSimDate);
+          startSimulationLoop();
+        }
+      });
+
+      window.addEventListener('beforeunload', () => {
+        stopSimulationLoop();
+        marineWorker.terminate();
+        URL.revokeObjectURL(workerUrl);
+      });
     });
   </script>
 </body>
