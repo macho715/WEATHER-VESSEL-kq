@@ -1,11 +1,21 @@
 import type { Metadata } from "next"
 import "./globals.css"
 import type React from "react"
-import { Geist as V0_Font_Geist, Source_Serif_4 as V0_Font_Source_Serif_4 } from "next/font/google"
+import {
+  Geist as V0_Font_Geist,
+  Source_Serif_4 as V0_Font_Source_Serif_4,
+  Geist as V0_Font_Geist,
+} from "next/font/google"
 
 const fontGeist = V0_Font_Geist({
   subsets: ["latin"],
   variable: "--font-geist",
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+})
+
+const fontGeistMono = V0_Font_Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
 })
 
@@ -23,7 +33,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fontGeist.variable}`}>
+    <html lang="en" className={`${fontGeist.variable} ${fontGeistMono.variable} ${fontSourceSerif.variable}`}>
       <body>{children}</body>
     </html>
   )
