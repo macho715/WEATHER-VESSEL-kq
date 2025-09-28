@@ -1,0 +1,32 @@
+providers:
+  - name: ProviderA
+    adapter: provider_a
+    base_url: "https://api.provider-a.example"
+    secret_suffix: A
+    timeout_seconds: 8.0
+    retries: 3
+    cache:
+      ttl_seconds: 600
+    rate_limit:
+      requests_per_minute: 30
+    units: metric
+  - name: ProviderB
+    adapter: provider_b
+    base_url: "https://api.provider-b.example"
+    secret_suffix: B
+    timeout_seconds: 8.0
+    retries: 2
+    cache:
+      ttl_seconds: 300
+    rate_limit:
+      requests_per_minute: 20
+    units: metric
+provider_order:
+  - ProviderA
+  - ProviderB
+marine_thresholds:
+  max_wind_speed: 22.0
+  max_wave_height: 4.0
+  max_gust: 28.0
+  min_visibility: 4.0
+provenance_enabled: true

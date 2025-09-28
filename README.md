@@ -23,9 +23,47 @@ Advanced vessel tracking and maritime logistics management system with real-time
 ## Quick Start
 
 1. **Deploy to Vercel**: Click the "Publish" button in the top right
-2. **Access the Application**: Navigate to `/logistics-app.html` 
+2. **Access the Application**: Navigate to `/logistics-app.html`
 3. **Upload Data**: Use the upload buttons to load voyage schedules (CSV/JSON) and weather data (CSV)
 4. **Monitor Operations**: Watch real-time vessel tracking and schedule updates
+
+## Python Weather Toolkit
+
+The repository now includes an operator CLI for live weather aggregation and voyage planning.
+
+### Setup
+
+1. Create a virtual environment and install dependencies:
+
+   ```bash
+   make install
+   ```
+
+2. Copy `.env.example` to `.env` and provide provider API keys if available.
+
+3. Review `config.yaml` for provider endpoints, rate limits, and threshold defaults.
+
+### Key Commands
+
+- Run lint checks: `make lint`
+- Run strict type checks: `make typecheck`
+- Execute tests with coverage: `make test`
+
+### CLI Usage
+
+Fetch normalized weather with provenance:
+
+```bash
+python -m src.cli fetch-weather --lat 25.3 --lon 55.3 --when now
+```
+
+Plan a voyage and generate reports:
+
+```bash
+python -m src.cli plan-voyage --from MW4 --to AGI --departure 2025-09-29T20:00 --distance-nm 360 --lat 25.3 --lon 55.3
+```
+
+Outputs include console summaries, Markdown in `reports/`, and CSV append in `outputs/voyage_summary.csv`.
 
 ## File Formats
 
