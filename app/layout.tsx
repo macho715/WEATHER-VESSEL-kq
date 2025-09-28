@@ -1,18 +1,14 @@
 import type { Metadata } from "next"
 import "./globals.css"
-
 import type React from "react"
+import {
+  Geist as V0_Font_Geist,
+  Source_Serif_4 as V0_Font_Source_Serif_4,
+  Geist as V0_Font_Geist,
+} from "next/font/google"
 
-// ✅ 모듈 최상단에서 const로 폰트 할당
 const fontGeist = V0_Font_Geist({
   subsets: ["latin"],
-import { Geist as V0_Font_Geist, Geist_Mono as V0_Font_Geist_Mono, Source_Serif_4 as V0_Font_Source_Serif_4 } from 'next/font/google'
-
-// Initialize fonts
-V0_Font_Geist({ weight: ["100","200","300","400","500","600","700","800","900"] })
-V0_Font_Geist_Mono({ weight: ["100","200","300","400","500","600","700","800","900"] })
-V0_Font_Source_Serif_4({ weight: ["200","300","400","500","600","700","800","900"] })
-
   variable: "--font-geist",
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
 })
