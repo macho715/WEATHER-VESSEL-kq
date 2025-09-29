@@ -1,70 +1,78 @@
-# Logistics Control Tower v2.5
+# Logistics Control Tower v2.6
 
-Advanced vessel tracking and maritime logistics management system with real-time simulation, weather integration, and AI-powered analytics.
+Next.js powered control tower for JOPETWIL 71 with real-time marine telemetry, automated reporting, and AI-assisted briefings.
 
-## Features
+## Highlights
 
-- **Interactive Vessel Tracking**: Real-time vessel position tracking with Leaflet.js maps
-- **Voyage Schedule Management**: Complete ETD/ETA tracking with Go/No-Go decision support
-- **Weather Integration**: CSV weather data upload with automatic schedule adjustments
-- **AI-Powered Analytics**: Daily briefings and risk assessment with AI assistant
-- **Real-time Simulation**: Configurable speed simulation with marine data integration
-- **IOI Calculation**: Index of Interest scoring based on wave height, wind speed, and swell period
-- **Accessibility**: Full ARIA support, keyboard navigation, and screen reader compatibility
+- **Automated Briefings**: `/api/report` composes vessel, weather, and AI insights and dispatches to Slack and email twice daily.
+- **Health Awareness**: `/api/health` now exposes the most recent report outcome for the dashboard badge and monitoring.
+- **Manual Control**: Operators can trigger the daily report directly from the control center panel without leaving the dashboard.
+- **Self-Host Friendly**: `scripts/scheduler.ts` mirrors the Vercel cron schedule with node-cron, lock protection, and rich logging.
+- **Typed Utilities**: Shared notifier helpers encapsulate Slack and Resend delivery, with graceful degradation and timeout handling.
 
-## Technology Stack
+## Getting Started
 
-- **Frontend**: HTML5, JavaScript ES6+, Tailwind CSS
-- **Mapping**: Leaflet.js with dark theme tiles
-- **Weather Data**: Open-Meteo Marine API integration
-- **Performance**: Web Workers for marine data processing
-- **Deployment**: Static export optimized for Vercel
+```bash
+pnpm install
+cp .env.example .env.local # fill in Slack/Resend credentials
+pnpm dev
+```
 
-## Quick Start
+Navigate to [`http://localhost:3000/logistics-app.html`](http://localhost:3000/logistics-app.html) to view the dashboard.
 
-1. **Deploy to Vercel**: Click the "Publish" button in the top right
-2. **Access the Application**: Navigate to `/logistics-app.html` 
-3. **Upload Data**: Use the upload buttons to load voyage schedules (CSV/JSON) and weather data (CSV)
-4. **Monitor Operations**: Watch real-time vessel tracking and schedule updates
+## Environment Variables
 
-## File Formats
+| Variable | Description |
+| --- | --- |
+| `SLACK_WEBHOOK_URL` | Incoming webhook for the Slack channel receiving briefings |
+| `RESEND_API_KEY` | API key for [Resend](https://resend.com/) transactional email |
+| `REPORT_SENDER` | From address for dispatched emails |
+| `REPORT_RECIPIENTS` | Comma-separated recipient list |
+| `REPORT_TIMEZONE` | Timezone for reporting windows (default `Asia/Dubai`) |
+| `REPORT_ENDPOINT` | Base URL used by the self-host scheduler (default `http://localhost:3000/api/report`) |
+| `REPORT_LOCK_FILE` | Optional lock file override for the scheduler |
 
-### Schedule Data (CSV/JSON)
-\`\`\`csv
-id,cargo,etd,eta,status
-69th,Dune Sand,2025-09-28T16:00:00Z,2025-09-29T04:00:00Z,Scheduled
-\`\`\`
+## Daily Reporting
 
-### Weather Data (CSV)
-\`\`\`csv
-start,end,wave_m,wind_kt,vis_km
-2025-09-28T12:00:00Z,2025-09-28T18:00:00Z,1.5,20,5.0
-\`\`\`
+### API
 
-## Key Components
+`GET /api/report?slot=am|pm`
 
-- **Vessel Control Panel**: Real-time vessel status and marine conditions
-- **Schedule Table**: Full voyage schedule with IOI scoring and Go/No-Go decisions  
-- **Risk Simulation**: Time-accelerated simulation with weather-based risk assessment
-- **AI Assistant**: Interactive chat for logistics queries and analysis
-- **Weather Linkage**: Automatic schedule adjustments based on weather windows
+- Aggregates `/api/vessel`, `/api/marine`, and `/api/briefing`
+- Appends a marine snapshot line to the AI briefing
+- Dispatches Slack + Resend email, tolerating partial failures
+- Responds with JSON `{ ok, sent, slot, generatedAt, sample }`
 
-## Accessibility Features
+### Scheduling
 
-- Screen reader support with comprehensive ARIA labels
-- Keyboard navigation for all interactive elements
-- High contrast mode support
-- Focus management for modal dialogs
-- Skip links for keyboard users
+- **Vercel**: `vercel.json` registers UTC `0 2 * * *` and `0 13 * * *` crons (06:00/17:00 Asia/Dubai)
+- **Self-host**: run `REPORT_TIMEZONE=Asia/Dubai node scripts/scheduler.ts`
+  - Uses `node-cron` with lock file protection (`.weather-vessel-report.lock`)
+  - Logs status, HTTP errors, and partial delivery states
 
-## Performance Optimizations
+## Dashboard Updates
 
-- Web Workers for marine data processing
-- Passive event listeners for scroll/touch
-- RequestIdleCallback for non-critical operations
-- Optimized rendering with minimal DOM updates
+- Header badge now shows `API: Online · Report OK` (or pending) with tooltip `Last report: …`
+- Manual “📤 Send Daily Report” button issues `GET /api/report` and logs the outcome in the event feed.
 
-Built with ❤️ for maritime logistics professionals.
-\`\`\`
+## Testing & Quality
 
-```json file="" isHidden
+```bash
+pnpm lint        # Next.js ESLint rules
+pnpm typecheck   # TypeScript strict mode
+pnpm test        # Vitest with coverage ≥ 70%
+```
+
+Vitest suites mock outbound fetch calls for notifier and reporting logic.
+
+## Deployment Checklist
+
+1. Configure environment variables on Vercel (or `.env.local`).
+2. Ensure Resend domain is verified for the chosen sender address.
+3. Verify Slack webhook permissions for the target channel.
+4. Deploy (`pnpm build`) and monitor `/api/health` for report status.
+5. For self-hosted environments, keep `scripts/scheduler.ts` running via PM2/systemd.
+
+## Changelog
+
+See [`CHANGELOG.md`](./CHANGELOG.md) for release history.

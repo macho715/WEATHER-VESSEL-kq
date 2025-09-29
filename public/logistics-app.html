@@ -2,127 +2,188 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Logistics Control Tower v2.5</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vessel Control v3 – Integrated</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <style>
-    body{background:#0f172a;color:#e2e8f0;font-family:'Segoe UI',sans-serif}
-    .leaflet-container{background:#1f2937;border-radius:.75rem}
-    .leaflet-tooltip{background:rgba(15,23,42,.95);color:#fff;border:1px solid #475569;box-shadow:none;font-weight:600;padding:4px 8px}
-    .scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}
-    .modal{transition:opacity .25s ease;z-index:10000}
-    body.modal-open{overflow:hidden}
-    #map{position:relative;z-index:0}
-    .leaflet-tooltip,.leaflet-popup{z-index:500!important}
-    .row-current{background:rgba(59,130,246,.15)}
-    .kbd{border:1px solid #475569;border-bottom-width:2px;border-radius:.375rem;padding:.15rem .35rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-    .tag{font-size:.75rem;padding:.1rem .4rem;border:1px solid #475569;border-radius:.5rem}
-    .chip{display:inline-flex;align-items:center;gap:.25rem;padding:.25rem .5rem;border-radius:.5rem;background:rgba(79,70,229,.2);color:#c7d2fe;font-size:.75rem}
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    .btn { min-height: 44px; min-width: 44px; } /* 터치 타겟 44px 기준 */
+    :root {
+      --panel-height: 520px;
+      --schedule-max-height: 320px;
+    }
 
-    @media (prefers-contrast: more) {
-        :root {
-            --accent: #00b4ff;
-            --text: #ffffff;
-            --muted: #e2e8f0;
-        }
-        .panel, .status-card, .control-card { border-color: rgba(255,255,255,0.6); }
-        .pill { background: rgba(0,180,255,0.25); }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at top, #1e293b 0%, #0f172a 55%, #020617 100%);
+      color: #e2e8f0;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    main {
+      flex: 1;
+      width: 100%;
+    }
+
+    .skeleton {
+      background-image: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.14), rgba(255,255,255,0.06));
+      background-size: 200% 100%;
+      animation: shimmer 1.8s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+    .modal { transition: opacity .25s ease; z-index: 10000; }
+    .leaflet-container { background: transparent; border-radius: 0.75rem; }
+    .leaflet-tooltip { background: rgba(15,23,42,.95); color: #fff; border: 1px solid #475569; box-shadow: none; font-weight: 600; padding: 4px 8px; }
+
+    @media (min-width: 1280px) {
+      section[data-panel], aside[data-panel] {
+        min-height: var(--panel-height);
+      }
+      #schedule-container {
+        max-height: var(--schedule-max-height);
+      }
     }
   </style>
 </head>
-<body class="p-4">
-  <!-- Skip link for keyboard users -->
+<body class="bg-slate-950 text-slate-100" data-api-base-url="">
   <a href="#main" class="sr-only" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;"
-     onfocus="this.style.position='static';this.style.width='auto';this.style.height='auto';this.style.padding='0.5rem 0.75rem';this.style.background='#0ea5e9';this.style.color='#000';this.style.borderRadius='8px';">
+     onfocus="this.style.position='static';this.style.width='auto';this.style.height='auto';this.style.padding='0.5rem 0.75rem';this.style.background='#38bdf8';this.style.color='#020617';this.style.borderRadius='0.5rem';">
      Skip to main content
   </a>
-  <main id="main" class="grid grid-cols-1 lg:grid-cols-5 gap-4 h-[95vh]" role="main" aria-live="polite">
-    <div id="map" class="lg:col-span-3 rounded-xl shadow-xl border border-slate-700 h-full min-h-[400px]" 
-         role="img" aria-label="Vessel tracking map showing route from MW4 to AGI" tabindex="0"></div>
 
-    <aside class="lg:col-span-2 flex flex-col gap-4 h-full" role="complementary" aria-label="Vessel control and schedule information">
-      <div id="info-panel" class="bg-slate-900 p-4 rounded-xl shadow-lg border border-slate-700">
-        <div class="flex items-center justify-between">
-          <h2 class="text-xl font-bold border-b border-slate-600 pb-2 mb-3">Vessel Control</h2>
-          <div class="flex items-center gap-2">
-            <span class="tag">Local: Asia/Dubai</span>
-            <div class="pill" id="marineBadge" title="Marine snapshot">Hs: -- m · Wind: -- kt</div>
-          </div>
-        </div>
-        <div id="vessel-info"><p class="text-slate-400">Loading vessel data...</p></div>
-
-        <div class="grid grid-cols-2 gap-2 mt-4">
-          <button id="briefing-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-                  aria-describedby="briefing-desc">✨ Daily Briefing</button>
-          <button id="assistant-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-                  aria-describedby="assistant-desc">🤖 Ask AI Assistant</button>
-        </div>
-        <div class="sr-only" id="briefing-desc">Generate AI-powered daily logistics briefing</div>
-        <div class="sr-only" id="assistant-desc">Open AI assistant chat for logistics questions</div>
-
-        <div class="mt-4 grid grid-cols-2 gap-2">
-          <label class="w-full">
-            <input type="file" id="file-schedule" class="hidden" accept=".csv,.json"/>
-            <span id="label-schedule" class="w-full inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg cursor-pointer">Upload Schedule (CSV/JSON)</span>
-          </label>
-          <label class="w-full">
-            <input type="file" id="file-weather" class="hidden" accept=".csv"/>
-            <span id="label-weather" class="w-full inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-lg cursor-pointer">Upload Weather (CSV)</span>
-          </label>
-        </div>
-        <p class="mt-3 text-xs text-slate-400">Tips: Press <span class="kbd">Esc</span> to close modals. 파일 포맷은 하단 가이드를 참고. API는 <span class="chip" id="api-status">API: Offline</span></p>
-      </div>
-
-      <div class="bg-slate-900 p-4 rounded-xl shadow-lg border border-slate-700 flex-grow flex flex-col h-1/2">
-        <div class="flex items-center justify-between border-b border-slate-600 pb-2 mb-3">
-          <h2 class="text-xl font-bold">Full Voyage Schedule</h2>
-          <span id="linkage-badge" class="tag" aria-live="polite">Linked to Weather: OFF</span>
-        </div>
-        <div id="schedule-container" class="overflow-y-auto scrollbar-hide flex-grow" aria-busy="false" role="region" aria-label="Voyage schedule table">
-          <table class="w-full text-left text-sm" role="table" aria-describedby="schedule-caption">
-            <caption id="schedule-caption" class="sr-only">Voyage schedule with ETD, ETA, cargo, and status information</caption>
-            <thead class="sticky top-0 bg-slate-900">
-              <tr role="row">
-                <th scope="col" id="th-voyage" role="columnheader">Voyage</th>
-                <th scope="col" id="th-cargo" role="columnheader">Cargo</th>
-                <th scope="col" id="th-etd" role="columnheader">ETD</th>
-                <th scope="col" id="th-eta" role="columnheader">ETA</th>
-                <th scope="col" id="th-status" role="columnheader">Status</th>
-                <th scope="col" id="th-ioi" role="columnheader">IOI (0–100)</th>
-                <th scope="col" id="th-decision" role="columnheader">Go/No-Go</th>
-              </tr>
-            </thead>
-            <tbody id="schedule-body" role="rowgroup"></tbody>
-          </table>
+  <header class="border-b border-slate-800/60 sticky top-0 z-40 bg-slate-950/80 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <div id="header-vessel-name" class="text-lg font-semibold">🛳️ Loading…</div>
+        <div class="text-xs sm:text-sm text-slate-300">
+          IMO <span id="header-imo">—</span> · MMSI <span id="header-mmsi">—</span> · Local: <span id="header-timezone">Asia/Dubai</span>
         </div>
       </div>
-
-      <div id="risk-panel" class="bg-slate-900 p-4 rounded-xl shadow-lg border border-slate-700" role="region" aria-label="Risk simulation and control">
-        <div class="flex items-center justify-between">
-          <h2 class="text-xl font-bold border-b border-slate-600 pb-2 mb-3">Risk Simulation & Control</h2>
-          <button id="btn-ai-risk" class="text-xs bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-md transition"
-                  aria-describedby="risk-scan-desc">AI Risk Scan</button>
-        </div>
-        <div class="flex items-center justify-between gap-3">
-          <p id="sim-time" class="text-lg font-mono" aria-live="polite" aria-label="Current simulation time"></p>
-          <div class="flex items-center gap-2">
-            <button id="btn-reset" class="bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-2 rounded"
-                    aria-describedby="reset-desc">Reset Sim</button>
-            <span class="tag" id="sim-speed" aria-live="polite" aria-label="Simulation speed multiplier">×4.00</span>
-          </div>
-        </div>
-        <div id="alert-container" class="mt-4" role="alert" aria-live="polite" aria-atomic="false">
-          <p class="text-green-400">✅ 시스템 정상. 활성 위험 없음.</p>
-        </div>
-        <div class="sr-only" id="risk-scan-desc">Run AI-powered risk analysis on current voyage schedule</div>
-        <div class="sr-only" id="reset-desc">Reset simulation to initial state</div>
+      <div class="ml-auto flex items-center gap-2">
+        <span id="header-status" class="px-2 py-1 rounded-full text-xs bg-slate-800/80 text-slate-200">Loading…</span>
+        <button id="btn-quick-go" class="px-3 py-1.5 rounded-md bg-indigo-600/90 hover:bg-indigo-600 text-sm">✅ Quick Go</button>
+        <button id="btn-delay-24h" class="px-3 py-1.5 rounded-md bg-amber-600/90 hover:bg-amber-600 text-sm">⏸ Delay 24h</button>
+        <button id="btn-recalculate" class="px-3 py-1.5 rounded-md bg-slate-700 hover:bg-slate-600 text-sm">🔁 Recalculate</button>
       </div>
     </div>
-  </div>
+  </header>
+
+  <main id="main" class="max-w-7xl mx-auto w-full p-4 pb-24 grid grid-cols-1 xl:grid-cols-3 gap-4" role="main" aria-live="polite">
+    <section aria-label="Map" data-panel class="xl:col-span-1 bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden flex flex-col">
+      <div class="p-3 flex items-center justify-between border-b border-slate-800">
+        <h2 class="font-semibold">Map &amp; Weather</h2>
+        <div class="flex gap-2 text-xs">
+          <span id="marine-badge" class="px-2 py-1 rounded bg-slate-800/80 text-sky-200">Hs: -- m · Wind: -- kt</span>
+        </div>
+      </div>
+      <div class="grow relative">
+        <div id="map" class="absolute inset-0 z-[1]"></div>
+        <div id="map-skeleton" class="absolute inset-0 skeleton"></div>
+        <div class="absolute bottom-3 left-3 text-xs bg-black/50 px-2 py-1 rounded z-[2]">Legend: 🌊 Swell · 💨 Wind</div>
+      </div>
+      <div class="p-3 grid grid-cols-3 gap-3 border-t border-slate-800 text-xs">
+        <div class="bg-slate-800/60 rounded-lg p-2">ETD: <b id="map-etd" class="text-slate-100">N/A</b></div>
+        <div class="bg-slate-800/60 rounded-lg p-2">ETA: <b id="map-eta" class="text-slate-100">N/A</b></div>
+        <div class="bg-slate-800/60 rounded-lg p-2">Risk: <span id="map-risk" class="text-amber-300">Calculating…</span></div>
+      </div>
+    </section>
+
+    <section aria-label="Schedule" data-panel class="xl:col-span-1 bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden flex flex-col">
+      <div class="p-3 flex items-center justify-between border-b border-slate-800">
+        <h2 class="font-semibold">Full Voyage Schedule</h2>
+        <div class="text-xs text-slate-300">Linked to Weather: <span id="linkage-badge" class="text-rose-300">OFF</span></div>
+      </div>
+      <div id="schedule-container" class="overflow-auto flex-1">
+        <table class="w-full text-sm" role="table" aria-describedby="schedule-caption">
+          <caption id="schedule-caption" class="sr-only">Voyage schedule with ETD, ETA, IOI and risk decisions</caption>
+          <thead class="bg-slate-900/80 sticky top-0 z-10">
+            <tr class="text-left">
+              <th class="px-3 py-2">Voyage</th>
+              <th class="px-3 py-2">Cargo</th>
+              <th class="px-3 py-2">ETD</th>
+              <th class="px-3 py-2">ETA</th>
+              <th class="px-3 py-2">IOI</th>
+              <th class="px-3 py-2">Risk</th>
+              <th class="px-3 py-2">Go/No-Go</th>
+            </tr>
+          </thead>
+          <tbody id="schedule-body" class="divide-y divide-slate-800" role="rowgroup"></tbody>
+        </table>
+      </div>
+      <div class="p-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 text-xs">
+        <div class="text-slate-300">Tip: 행 클릭 → 항로 하이라이트 · 우측 패널 동기화</div>
+        <div class="flex items-center gap-2">
+          <label class="flex items-center gap-1"><input id="toggle-weather-link" type="checkbox" class="accent-indigo-500"> Weather Link</label>
+          <button id="btn-export" class="px-2 py-1 rounded bg-slate-800">Export CSV</button>
+        </div>
+      </div>
+    </section>
+
+    <aside aria-label="Controls" data-panel class="xl:col-span-1 bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden flex flex-col">
+      <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+        <h2 class="font-semibold">Control Center</h2>
+        <span id="api-status" class="text-xs text-rose-300">API: Checking…</span>
+      </div>
+      <div class="p-3 grid gap-3">
+        <div id="vessel-info" class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 text-sm space-y-3">
+          <div class="skeleton h-4 rounded"></div>
+          <div class="skeleton h-4 rounded"></div>
+          <div class="skeleton h-20 rounded"></div>
+        </div>
+        <div id="ai-analysis-panel" class="hidden bg-slate-900/80 border border-slate-800 rounded-xl p-4 text-sm space-y-3" role="region" aria-label="AI weather analysis">
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-sky-300">✨ AI Weather Insight</h3>
+            <span class="text-xs px-2 py-1 rounded bg-slate-800">Screenshot Ready</span>
+          </div>
+          <div id="analysis-content" class="text-slate-200 bg-slate-950/80 rounded-lg p-3 text-sm leading-relaxed whitespace-pre-line"></div>
+        </div>
+        <button id="briefing-btn" class="w-full py-2 rounded-lg bg-fuchsia-700/80 hover:bg-fuchsia-700">✨ Daily Briefing</button>
+        <button id="assistant-btn" class="w-full py-2 rounded-lg bg-violet-700/80 hover:bg-violet-700">🤖 Ask AI Assistant</button>
+        <button id="btn-dispatch-report" class="w-full py-2 rounded-lg bg-sky-700/80 hover:bg-sky-600" aria-describedby="report-desc">📤 Send Daily Report</button>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="flex">
+            <input type="file" id="file-schedule" class="hidden" accept=".csv,.json" />
+            <span id="label-schedule" class="w-full py-2 text-center rounded-lg bg-indigo-700/80 hover:bg-indigo-700 text-sm cursor-pointer">Upload Schedule (CSV/JSON)</span>
+          </label>
+          <label class="flex">
+            <input type="file" id="file-weather" class="hidden" accept=".csv,image/*" />
+            <span id="label-weather" class="w-full py-2 text-center rounded-lg bg-cyan-700/80 hover:bg-cyan-700 text-sm cursor-pointer">Upload Weather (CSV/Image)</span>
+          </label>
+        </div>
+        <div class="text-xs text-slate-300">파일 업로드 시 자동 파싱 → 스케줄/리스크 테이블에 반영</div>
+        <div class="sr-only" id="report-desc">Generate and dispatch the multi-channel daily report immediately</div>
+        <div id="assistant-hint" class="text-[11px] text-slate-400">Tips: Esc로 모달 닫기 · 붙여넣기(Ctrl/⌘+V)로 캡처 업로드</div>
+      </div>
+      <div class="mt-auto p-3 border-t border-slate-800 text-xs space-y-3">
+        <div class="flex items-center justify-between">
+          <div>Risk Scan</div>
+          <div class="flex items-center gap-2">
+            <button id="btn-ai-risk" class="px-2 py-1 rounded bg-slate-800">AI Scan</button>
+            <button id="btn-reset" class="px-2 py-1 rounded bg-slate-800">Reset Sim</button>
+            <span id="sim-speed" class="px-2 py-1 rounded bg-slate-800/70">×4.00</span>
+          </div>
+        </div>
+        <div id="sim-meta" class="text-slate-300">--:-- · 대기 · 초기화 중</div>
+        <div id="alert-container" class="bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-xs text-emerald-300">✅ 시스템 초기화 중</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="sticky bottom-0 z-40">
+    <div id="event-feed" class="max-w-7xl mx-auto m-4 rounded-xl bg-black/40 border border-slate-800 px-4 py-2 text-xs flex items-center gap-4 overflow-x-auto">
+      <span class="text-slate-300">🟢 Dashboard booting…</span>
+    </div>
+  </footer>
 
   <div id="briefing-modal" class="modal fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 opacity-0 pointer-events-none"
        role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-content" aria-hidden="true">
@@ -147,19 +208,20 @@
           </label>
         </div>
       </div>
-      <div id="assistant-conversation" class="flex-grow bg-slate-950 p-4 rounded-md overflow-y-auto scrollbar-hide space-y-2 text-sm">
-        <div class="text-slate-400">무엇을 도와드릴까요? (예: “다음 3일 스케줄 요약”)<br/>첨부 버튼으로 캡처/문서를 추가하면 자동 분석됩니다.</div>
+      <div id="assistant-conversation" class="flex-grow bg-slate-950 p-4 rounded-md overflow-y-auto space-y-2 text-sm">
+        <div class="text-slate-400">무엇을 도와드릴까요? (예: "다음 3일 스케줄 요약")<br/>첨부 버튼으로 캡처/문서를 추가하면 자동 분석됩니다.</div>
       </div>
-      <div class="mt-3 bg-slate-800/60 border border-slate-600 rounded-lg p-3">
+      <div id="assistant-dropzone" class="mt-3 bg-slate-800/60 border border-dashed border-slate-600 rounded-lg p-3">
         <div class="flex items-center justify-between">
           <div class="text-xs text-slate-300 font-semibold">Attachments</div>
           <button id="assistant-attach-btn" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded">+ Add</button>
         </div>
+        <p class="mt-2 text-[11px] text-slate-400">+ 버튼을 누르거나 파일을 끌어다 놓고, 스크린 캡처는 붙여넣기(Ctrl/⌘+V)로 추가하세요.</p>
         <input type="file" id="assistant-file" class="hidden" accept="image/*,.pdf,.txt,.csv" multiple />
-        <div id="assistant-attachments" class="mt-2 text-xs text-slate-400 space-y-1"></div>
+        <div id="assistant-attachments" class="mt-3 text-xs text-slate-300 space-y-2 min-h-[3rem]" aria-live="polite"></div>
       </div>
       <form id="assistant-form" class="mt-3 flex gap-2" role="form" aria-label="AI Assistant Chat">
-        <input type="text" id="assistant-input" class="flex-grow bg-slate-800 text-white rounded-lg p-2 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500" 
+        <input type="text" id="assistant-input" class="flex-grow bg-slate-800 text-white rounded-lg p-2 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
                placeholder="Ask a question..." aria-label="Type your question here" aria-describedby="assistant-input-desc">
         <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
                 aria-label="Send message">Send</button>
@@ -172,626 +234,1007 @@
       <button id="close-assistant-btn" class="mt-3 w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">Close</button>
     </div>
   </div>
-
   <script>
-    // requestIdleCallback 폴리필 (간단)
-    window.requestIdleCallback ||= (cb)=>setTimeout(()=>cb({didTimeout:false,timeRemaining:()=>0}), 1);
-    window.cancelIdleCallback ||= (id)=>clearTimeout(id);
+    window.requestIdleCallback ||= (cb) => setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 1);
+    window.cancelIdleCallback ||= (id) => clearTimeout(id);
 
     document.addEventListener('DOMContentLoaded', () => {
-      const API_BASE = window.APP_CONFIG?.apiBase ?? 'http://localhost:8000';
-      const tz = 'Asia/Dubai';
-      
-      // Scenario presets and port coordinates
-      const scenarioPresets = {
-        base:        { delayOnRisk: 4.0,  hs_caution: 1.50, hs_nogo: 2.50, wind_caution: 18, wind_nogo: 28 },
-        weather:     { delayOnRisk: 6.0,  hs_caution: 1.20, hs_nogo: 2.00, wind_caution: 16, wind_nogo: 24 },
-        congestion:  { delayOnRisk: 5.0,  hs_caution: 1.60, hs_nogo: 2.60, wind_caution: 20, wind_nogo: 30 },
-        inspection:  { delayOnRisk: 3.5, hs_caution: 1.80, hs_nogo: 2.80, wind_caution: 22, wind_nogo: 32 }
-      };
-      const RULE = scenarioPresets.base;
-      
-      const portCoords = {
-        'Shanghai':   { lat: 31.2304, lon: 121.4737 },
-        'Singapore':  { lat: 1.3521,  lon: 103.8198 },
-        'Colombo':    { lat: 6.9271,  lon: 79.8612  },
-        'Jebel Ali':  { lat: 25.006,  lon: 55.065   }
-      };
-      const fmtIso = (d)=> new Date(d).toISOString();
-      const toLocal = (d)=> new Date(d).toLocaleString('en-GB',{ timeZone: tz, dateStyle:'short', timeStyle:'medium' });
-      const pad2 = (n)=> String(n).padStart(2,'0');
-      const clamp = (v,min,max)=> Math.max(min, Math.min(max,v));
-      const parseNum = (s)=> Number(String(s||'').trim());
-      const parseISO = (s)=> {
-        if(!s) return null;
-        const t = String(s).trim().replace(' ', 'T');
-        return isNaN(Date.parse(t)) ? null : new Date(t);
-      };
-      const parseCSV = (text)=>{
-        const lines = text.trim().split(/\r?\n/);
-        const header = lines.shift().split(',').map(h=>h.trim());
-        return lines.map(line=>{
-          const cells = line.split(',').map(c=>c.trim());
-          const obj={};
-          header.forEach((h,i)=> obj[h]=cells[i]);
-          return obj;
-        });
+      const API_BASE = document.body.dataset.apiBaseUrl || '';
+      const elements = {
+        header: {
+          vessel: document.getElementById('header-vessel-name'),
+          status: document.getElementById('header-status'),
+          timezone: document.getElementById('header-timezone'),
+          imo: document.getElementById('header-imo'),
+          mmsi: document.getElementById('header-mmsi'),
+        },
+        map: {
+          etd: document.getElementById('map-etd'),
+          eta: document.getElementById('map-eta'),
+          risk: document.getElementById('map-risk'),
+          skeleton: document.getElementById('map-skeleton'),
+          badge: document.getElementById('marine-badge'),
+        },
+        scheduleBody: document.getElementById('schedule-body'),
+        scheduleContainer: document.getElementById('schedule-container'),
+        linkageBadge: document.getElementById('linkage-badge'),
+        apiStatus: document.getElementById('api-status'),
+        vesselInfo: document.getElementById('vessel-info'),
+        simMeta: document.getElementById('sim-meta'),
+        simSpeed: document.getElementById('sim-speed'),
+        alert: document.getElementById('alert-container'),
+        eventFeed: document.getElementById('event-feed'),
+        analysisPanel: document.getElementById('ai-analysis-panel'),
+        analysisContent: document.getElementById('analysis-content'),
+        assistantConversation: document.getElementById('assistant-conversation'),
+        assistantUsage: document.getElementById('assistant-usage'),
+        assistantAttachments: document.getElementById('assistant-attachments'),
+        assistantDropzone: document.getElementById('assistant-dropzone'),
+        assistantModal: document.getElementById('assistant-modal'),
+        briefingModal: document.getElementById('briefing-modal'),
+        modalContent: document.getElementById('modal-content'),
       };
 
-      async function checkApiHealth(){
-        const badge = document.getElementById('api-status');
-        try{
-          const res = await fetch(`${API_BASE}/health`);
-          if(res.ok){
-            badge.textContent = 'API: Online';
-            badge.classList.remove('bg-rose-500/40');
-            badge.classList.add('bg-emerald-500/40','text-emerald-200');
-          }else{
-            throw new Error('Healthcheck failed');
+      const inputs = {
+        toggleWeather: document.getElementById('toggle-weather-link'),
+        fileSchedule: document.getElementById('file-schedule'),
+        fileWeather: document.getElementById('file-weather'),
+        assistantFile: document.getElementById('assistant-file'),
+        assistantInput: document.getElementById('assistant-input'),
+        assistantModel: document.getElementById('assistant-model'),
+      };
+
+      const labels = {
+        schedule: document.getElementById('label-schedule'),
+        weather: document.getElementById('label-weather'),
+      };
+
+      const buttons = {
+        quickGo: document.getElementById('btn-quick-go'),
+        delay: document.getElementById('btn-delay-24h'),
+        recalc: document.getElementById('btn-recalculate'),
+        export: document.getElementById('btn-export'),
+        briefing: document.getElementById('briefing-btn'),
+        assistantOpen: document.getElementById('assistant-btn'),
+        assistantAttach: document.getElementById('assistant-attach-btn'),
+        assistantReset: document.getElementById('assistant-reset'),
+        assistantClose: document.getElementById('close-assistant-btn'),
+        modalClose: document.getElementById('close-modal-btn'),
+        aiRisk: document.getElementById('btn-ai-risk'),
+        resetSim: document.getElementById('btn-reset'),
+        dispatchReport: document.getElementById('btn-dispatch-report'),
+      };
+
+      const state = {
+        timezone: 'Asia/Dubai',
+        vessel: null,
+        schedule: [],
+        weatherWindows: [],
+        ports: {},
+        events: [],
+        marine: null,
+        map: null,
+        marker: null,
+        polyline: null,
+        route: [],
+        simulation: {
+          now: new Date('2025-09-28T12:00:00Z'),
+          speedFactor: 240,
+          handle: null,
+        },
+        userInteractingWithSchedule: false,
+        interactionTimer: null,
+        lastAutoScrollVoyage: null,
+        weatherLinked: false,
+        pendingAttachments: [],
+        assistantHistory: [],
+        autoMarineHandle: null,
+        lastReport: null,
+      };
+
+      function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+      function feetToMeters(ft) { return ft / 3.28084; }
+      function metersToFeet(m) { return m * 3.28084; }
+      function parseISO(value) {
+        if (!value) return null;
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.valueOf()) ? null : parsed;
+      }
+      function toLocal(value) {
+        if (!value) return 'N/A';
+        return value.toLocaleString('ko-KR', { timeZone: state.timezone, dateStyle: 'medium', timeStyle: 'short' });
+      }
+      function applyReportStatus(status, report) {
+        state.lastReport = report || null;
+        let label = 'API: Offline';
+        let className = 'text-xs text-rose-300';
+        if (status === 'ok' || status === 'degraded') {
+          const okStatus = status === 'ok';
+          label = okStatus ? 'API: Online' : 'API: Degraded';
+          className = okStatus ? 'text-xs text-emerald-300' : 'text-xs text-amber-300';
+          if (report) {
+            const reportLabel = report.ok ? 'Report OK' : 'Report pending';
+            label += ` · ${reportLabel}`;
+            const tz = report.timezone || state.timezone;
+            const generated = parseISO(report.generatedAt);
+            if (generated) {
+              const local = generated.toLocaleString('ko-KR', { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' });
+              elements.apiStatus.title = `Last report: ${local} (${tz})`;
+            } else {
+              elements.apiStatus.title = `Last report timezone: ${tz}`;
+            }
+          } else {
+            elements.apiStatus.title = 'Report: 아직 전송 기록 없음';
           }
-        }catch(err){
-          badge.textContent = 'API: Offline';
-          badge.classList.remove('bg-emerald-500/40','text-emerald-200');
-          badge.classList.add('bg-rose-500/40');
+        } else {
+          elements.apiStatus.title = 'Report status unavailable';
+        }
+        elements.apiStatus.textContent = label;
+        elements.apiStatus.className = className;
+      }
+      function safeNumber(value, fallback = null) {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : fallback;
+      }
+
+      function updateCssHeights() {
+        const header = document.querySelector('header');
+        const footer = document.querySelector('footer');
+        const main = document.getElementById('main');
+        const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+        const headerHeight = header?.offsetHeight ?? 0;
+        const footerHeight = footer?.offsetHeight ?? 0;
+        let paddingTop = 0;
+        let paddingBottom = 0;
+        if (main) {
+          const styles = getComputedStyle(main);
+          paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+          paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
+        }
+        const available = Math.max(440, viewport - headerHeight - footerHeight - paddingTop - paddingBottom - 24);
+        document.documentElement.style.setProperty('--panel-height', `${available}px`);
+        const scheduleHeader = document.querySelector('section[aria-label="Schedule"] .border-b');
+        const scheduleFooter = document.querySelector('section[aria-label="Schedule"] .border-t');
+        const scheduleTop = scheduleHeader?.offsetHeight ?? 0;
+        const scheduleBottom = scheduleFooter?.offsetHeight ?? 0;
+        const maxSchedule = Math.max(220, available - (scheduleTop + scheduleBottom + 48));
+        document.documentElement.style.setProperty('--schedule-max-height', `${maxSchedule}px`);
+      }
+
+      updateCssHeights();
+      window.addEventListener('resize', () => window.requestIdleCallback(updateCssHeights));
+
+      const haversine = (a, b) => {
+        const R = 6371e3;
+        const toRad = (d) => d * Math.PI / 180;
+        const [lat1, lon1] = a;
+        const [lat2, lon2] = b;
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const phi1 = toRad(lat1);
+        const phi2 = toRad(lat2);
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLon / 2) ** 2;
+        return 2 * R * Math.asin(Math.sqrt(h));
+      };
+
+      let routeSegments = [];
+      let totalMeters = 0;
+      function rebuildRouteSegments() {
+        routeSegments = [];
+        totalMeters = 0;
+        if (!Array.isArray(state.route) || state.route.length < 2) return;
+        for (let i = 0; i < state.route.length - 1; i += 1) {
+          const a = state.route[i];
+          const b = state.route[i + 1];
+          const m = haversine(a, b);
+          routeSegments.push({ a, b, m, start: totalMeters, end: totalMeters + m });
+          totalMeters += m;
         }
       }
 
-      checkApiHealth();
-
-      const map = L.map('map').setView([24.7, 54.1], 8);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap & CARTO'}).addTo(map);
-
-      const vesselIcon = L.icon({iconUrl:'https://i.imgur.com/G4Am98f.png', iconSize:[35,35]});
-      const vesselData = {
-        name:"JOPETWIL 71", imo:"9582829", mmsi:"470486000",
-        route:[]
-      };
-      vesselData.route = [
-        [24.3400,54.4500], [24.4300,54.4300], [24.4700,54.3900],
-        [24.5600,54.2000], [24.6500,54.0000], [24.8500,53.8000],
-        [24.9500,53.7400], [24.9500,53.3000], [25.0200,53.0600],
-        [24.8400,53.6500]
-      ];
-      const vesselMarker = L.marker([24.34,54.45],{icon:vesselIcon})
-                .bindTooltip("JOPETWIL 71",{permanent:true,direction:'top',offset:[0,-18],className:'leaflet-tooltip'});
-      vesselMarker.addTo(map);
-      const vesselRoutePolyline = L.polyline(vesselData.route, {color:'#FBBF24', weight:3, dashArray:'5,10'}).addTo(map);
-      map.fitBounds(vesselRoutePolyline.getBounds(), {padding:[20,20]});
-
-      let currentSimDate = new Date("2025-09-28T12:00:00Z");
-      let speedFactor = 240;
-      let weatherLinked = false;
-      const simSpeedBadge = document.getElementById('sim-speed');
-      const linkageBadge = document.getElementById('linkage-badge');
-      simSpeedBadge.textContent = '×4.00';
-
-      let voyageSchedule = [
-        { id:"69th", cargo:"Dune Sand",  etd:"2025-09-28T16:00:00Z", eta:"2025-09-29T04:00:00Z", status:"Scheduled" },
-        { id:"70th", cargo:"10mm Agg.",  etd:"2025-09-30T16:00:00Z", eta:"2025-10-01T04:00:00Z", status:"Scheduled" },
-        { id:"71st", cargo:"5mm Agg.",   etd:"2025-10-02T16:00:00Z", eta:"2025-10-03T04:00:00Z", status:"Scheduled" }
-      ];
-
-      let weatherWindows = [];
-
-      const R=6371e3, toRad=d=>d*Math.PI/180;
-      function haversine(a,b){
-        const [lat1,lon1]=a,[lat2,lon2]=b;
-        const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
-        const phi1=toRad(lat1), phi2=toRad(lat2);
-        const h=Math.sin(dLat/2)**2 + Math.cos(phi1)*Math.cos(phi2)*Math.sin(dLon/2)**2;
-        return 2*R*Math.asin(Math.sqrt(h));
-      }
-      const segments=[]; let totalMeters=0;
-      for(let i=0;i<vesselData.route.length-1;i++){
-        const a=vesselData.route[i], b=vesselData.route[i+1];
-        const m=haversine(a,b);
-        segments.push({a,b,m,accStart:totalMeters,accEnd:totalMeters+m});
-        totalMeters+=m;
-      }
-      function interpolateOnRoute(progress){
-        const target=clamp(progress,0,1)*totalMeters;
-        const seg=segments.find(s=>target>=s.accStart && target<=s.accEnd) || segments[segments.length-1];
-        const t=(target-seg.accStart)/(seg.m||1);
-        const lat=seg.a[0]+(seg.b[0]-seg.a[0])*t;
-        const lon=seg.a[1]+(seg.b[1]-seg.a[1])*t;
+      function interpolateRoute(progress) {
+        if (!routeSegments.length) return state.route[0] || [0, 0];
+        const target = clamp(progress, 0, 1) * totalMeters;
+        const seg = routeSegments.find((s) => target >= s.start && target <= s.end) || routeSegments[routeSegments.length - 1];
+        const factor = (target - seg.start) / (seg.m || 1);
+        const lat = seg.a[0] + (seg.b[0] - seg.a[0]) * factor;
+        const lon = seg.a[1] + (seg.b[1] - seg.a[1]) * factor;
         return [Number(lat.toFixed(5)), Number(lon.toFixed(5))];
       }
 
-      const infoPanel = document.getElementById('vessel-info');
-      const timeDisplay = document.getElementById('sim-time');
-      const scheduleContainer = document.getElementById('schedule-container');
-      const alertContainer = document.getElementById('alert-container');
-      const assistantConversation = document.getElementById('assistant-conversation');
-      const assistantUsage = document.getElementById('assistant-usage');
-      const assistantFileInput = document.getElementById('assistant-file');
-      const assistantAttachments = document.getElementById('assistant-attachments');
-      const assistantModelSelect = document.getElementById('assistant-model');
-      let assistantHistory = [];
-      let pendingAttachments = [];
-
-      function updateInfoPanel(){
-        const cur=vesselData.currentVoyageId||'N/A';
-        infoPanel.innerHTML =
-          `<h3 class="text-2xl font-bold text-cyan-400">${vesselData.name}</h3>
-           <p class="text-sm text-slate-400">IMO: ${vesselData.imo} / MMSI: ${vesselData.mmsi}</p>
-           <div class="mt-4 space-y-2">
-             <div><strong>Current Voyage:</strong> <span class="font-mono text-lg">${cur}</span></div>
-             <div><strong>Status:</strong> <span class="font-mono text-lg text-yellow-300">${vesselData.status}</span></div>
-           </div>`;
+      function logEvent(level, message) {
+        const emoji = level === 'error' ? '🔴' : level === 'warn' ? '🟡' : '🟢';
+        state.events.unshift({ timestamp: new Date().toISOString(), level, message: `${emoji} ${message}` });
+        state.events = state.events.slice(0, 12);
+        renderEventFeed();
       }
 
-      async function renderSchedule(){
-        const scheduleBody = document.getElementById('schedule-body');
-        if (!scheduleBody) return;
-        
-        document.getElementById('schedule-container').setAttribute('aria-busy','true');
-        scheduleBody.innerHTML = '';
-        
-        const marineDataCache = new Map();
-        
-        // Pre-fetch marine data once for all voyages
-        if (!marineDataCache.has('Jebel Ali')) {
-          const snap = await updateMarineForLeg('Jebel Ali');
-          marineDataCache.set('Jebel Ali', snap);
+      function renderEventFeed() {
+        elements.eventFeed.innerHTML = '';
+        state.events.forEach((evt) => {
+          const span = document.createElement('span');
+          span.className = evt.level === 'error' ? 'text-rose-300' : evt.level === 'warn' ? 'text-amber-300' : 'text-slate-300';
+          span.textContent = evt.message;
+          elements.eventFeed.appendChild(span);
+        });
+        if (!state.events.length) {
+          const span = document.createElement('span');
+          span.className = 'text-slate-400';
+          span.textContent = '대기 중 이벤트 없음';
+          elements.eventFeed.appendChild(span);
         }
-        const cachedSnap = marineDataCache.get('Jebel Ali');
-        
-        for (let index = 0; index < voyageSchedule.length; index += 1) {
-          const v = voyageSchedule[index];
-          let c="text-slate-300", pill="";
-          if(v.status==="In Transit") { c="text-blue-300"; pill='<span class="tag">Sailing</span>'; }
-          else if(v.status==="Delayed") { c="text-rose-300"; pill='<span class="tag">Delayed</span>'; }
-          else if(v.status==="Completed") { c="text-emerald-300"; pill='<span class="tag">Arrived</span>'; }
-          const hi=v.id===vesselData.currentVoyageId ? "row-current" : "";
-          
-          let ioi = 50; // Default IOI value
-          if (cachedSnap?.ioi) {
-            ioi = cachedSnap.ioi;
+      }
+
+      function guardedFetch(url, options) {
+        return fetch(url, options).then((res) => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
           }
-          
-          const decision = ioi >= 75 ? { tag: 'Go', tone: 'success' } : 
-                          ioi >= 55 ? { tag: 'Caution', tone: 'warn' } : 
-                          { tag: 'No-Go', tone: 'danger' };
-          
+          return res.json();
+        });
+      }
+
+      function setAlert(message, tone = 'info') {
+        const tones = {
+          info: 'text-slate-200 border-slate-700 bg-slate-900/70',
+          warn: 'text-amber-200 border-amber-500/40 bg-amber-900/30',
+          danger: 'text-rose-200 border-rose-500/40 bg-rose-900/30',
+        };
+        const chosen = tones[tone] || tones.info;
+        elements.alert.innerHTML = `<div class="rounded-lg border px-4 py-3 ${chosen}">${message}</div>`;
+      }
+
+      function updateVesselInfo() {
+        if (!state.vessel) {
+          elements.vesselInfo.innerHTML = '<div class="skeleton h-20 rounded"></div>';
+          return;
+        }
+        const currentVoyage = state.schedule.find((voyage) => voyage.id === state.vessel.currentVoyageId);
+        const etd = currentVoyage ? toLocal(parseISO(currentVoyage.etd)) : 'N/A';
+        const eta = currentVoyage ? toLocal(parseISO(currentVoyage.eta)) : 'N/A';
+        const progressPct = clamp((state.vessel.progress ?? 0) * 100, 0, 100);
+        elements.vesselInfo.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-2xl font-bold text-cyan-400">${state.vessel.name}</h3>
+              <p class="text-sm text-slate-400">IMO: ${state.vessel.imo} / MMSI: ${state.vessel.mmsi}</p>
+            </div>
+            <span class="px-2 py-1 rounded-md text-xs bg-slate-800/80 border border-slate-600">${state.timezone}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+              <p class="text-slate-400 text-xs uppercase tracking-wider">Current Voyage</p>
+              <p class="mt-1 font-mono text-lg text-emerald-300">${state.vessel.currentVoyageId ?? 'N/A'}</p>
+            </div>
+            <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+              <p class="text-slate-400 text-xs uppercase tracking-wider">Status</p>
+              <p class="mt-1 font-semibold text-sky-300">${state.vessel.status}</p>
+            </div>
+          </div>
+          <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>Leg Progress</span>
+              <span class="font-mono text-slate-200">${progressPct.toFixed(2)}%</span>
+            </div>
+            <div class="w-full h-2 bg-slate-900/80 rounded-full mt-2">
+              <div class="h-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-500 to-emerald-400" style="width:${progressPct.toFixed(2)}%"></div>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
+              <div>
+                <span class="block uppercase tracking-wide">ETD</span>
+                <span class="font-mono text-slate-200">${etd}</span>
+              </div>
+              <div>
+                <span class="block uppercase tracking-wide">ETA</span>
+                <span class="font-mono text-slate-200">${eta}</span>
+              </div>
+            </div>
+          </div>`;
+      }
+      function renderSchedule() {
+        if (!elements.scheduleBody) return;
+        elements.scheduleBody.innerHTML = '';
+        const safeMarineHs = state.marine?.hs ?? null;
+        const safeMarineWind = state.marine?.windKt ?? null;
+        const safeMarineIoi = state.marine?.ioi ?? null;
+
+        const riskSummary = (voyage) => {
+          const hs = safeMarineHs ?? feetToMeters(voyage.swellFt);
+          const wind = safeMarineWind ?? voyage.windKt;
+          return `🌊 ${metersToFeet(hs).toFixed(2)} ft · 💨 ${wind.toFixed(2)} kt`;
+        };
+
+        state.schedule.forEach((voyage) => {
           const row = document.createElement('tr');
-          row.id = `voyage-${v.id}`;
-          row.className = `border-t border-slate-700 ${hi}`;
-          row.setAttribute('role', 'row');
+          row.className = `hover:bg-slate-800/40 ${voyage.id === state.vessel?.currentVoyageId ? 'bg-slate-800/50' : ''}`;
+          row.setAttribute('tabindex', '0');
+          const ioi = safeNumber(voyage.ioi, safeMarineIoi ?? 50);
+          const decision = ioi >= 75 ? { label: 'GO', classes: 'bg-emerald-900/40 text-emerald-300' } : ioi >= 55 ? { label: 'WATCH', classes: 'bg-amber-900/40 text-amber-300' } : { label: 'NO-GO', classes: 'bg-rose-900/40 text-rose-300' };
+          const barClass = decision.label === 'GO' ? 'bg-emerald-500' : decision.label === 'WATCH' ? 'bg-amber-500' : 'bg-rose-500';
           row.innerHTML = `
-            <td class="p-2 font-bold" role="gridcell" aria-describedby="th-voyage">${v.id}</td>
-            <td class="p-2" role="gridcell" aria-describedby="th-cargo">${v.cargo}</td>
-            <td class="p-2" role="gridcell" aria-describedby="th-etd">${toLocal(v.etd)}</td>
-            <td class="p-2" role="gridcell" aria-describedby="th-eta">${toLocal(v.eta)}</td>
-            <td class="p-2 ${c} font-semibold" role="gridcell" aria-describedby="th-status">${v.status} ${pill}</td>
-            <td class="p-2" role="gridcell" aria-describedby="th-ioi">${ioi}</td>
-            <td class="p-2" role="gridcell" aria-describedby="th-decision"><span class="pill ${decision.tone === 'danger' ? 'danger' : ''}">${decision.tag}</span></td>
-          `;
-          scheduleBody.appendChild(row);
-        }
-        
-        document.getElementById('schedule-container').setAttribute('aria-busy','false');
+            <td class="px-3 py-2 font-medium">${voyage.id}</td>
+            <td class="px-3 py-2">${voyage.cargo}</td>
+            <td class="px-3 py-2">${toLocal(parseISO(voyage.etd))}</td>
+            <td class="px-3 py-2">${toLocal(parseISO(voyage.eta))}</td>
+            <td class="px-3 py-2">
+              <div class="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-2 ${barClass}" style="width:${clamp(ioi, 0, 100).toFixed(2)}%"></div>
+              </div>
+            </td>
+            <td class="px-3 py-2 text-xs">${riskSummary(voyage)}</td>
+            <td class="px-3 py-2"><span class="px-2 py-1 rounded-md text-xs ${decision.classes}">${decision.label}</span></td>`;
 
-        if(vesselData.currentVoyageId){
-          const row=document.getElementById(`voyage-${vesselData.currentVoyageId}`);
-          if(row) row.scrollIntoView({block:'center',behavior:'smooth'});
-        }
-      }
+          row.addEventListener('click', () => {
+            state.vessel.currentVoyageId = voyage.id;
+            state.vessel.progress = 0;
+            state.vessel.status = voyage.status;
+            updateVesselInfo();
+            renderSchedule();
+            focusVoyageOnMap(voyage);
+            logEvent('info', `${voyage.id} 선택됨 · 맵 하이라이트`);
+          });
 
-      function setInfo(msgHtml, tone='info'){
-        const color = tone==='warn' ? 'bg-yellow-900 border-yellow-500 text-yellow-100'
-                     : tone==='danger' ? 'bg-rose-900 border-rose-500 text-rose-100'
-                     : 'bg-slate-950 border-slate-600 text-slate-200';
-        alertContainer.innerHTML = `<div class="${color} px-4 py-3 rounded border">${msgHtml}</div>`;
-      }
+          row.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              row.click();
+            }
+          });
 
-      const LIM = {
-        waveWarnM: 1.75, waveNoGoM: 2.25,
-        windWarnKt: 24, windNoGoKt: 30,
-        visNoGoKm: 1.0
-      };
+          elements.scheduleBody.appendChild(row);
+        });
 
-      function buildWeatherWindows(rows){
-        weatherWindows = rows.map(r=>{
-          const start = parseISO(r.start);
-          const end   = parseISO(r.end);
-          const wv = parseNum(r.wave_m);
-          const wd = parseNum(r.wind_kt);
-          const vs = parseNum(r.vis_km);
-          let level = 'None';
-          if(isFinite(wv) && isFinite(wd) && isFinite(vs)){
-            if(wv >= LIM.waveNoGoM || wd >= LIM.windNoGoKt || vs <= LIM.visNoGoKm) level='NoGo';
-            else if(wv >= LIM.waveWarnM || wd >= LIM.windWarnKt) level='Warn';
-          }
-          return { start, end, level, waveM:wv, windKt:wd, visKm:vs };
-        }).filter(w => w.start && w.end);
-      }
-
-      function findWeatherLevelAt(dt){
-        const t = +dt;
-        const w = weatherWindows.find(win => t>= +win.start && t<= +win.end);
-        return w ? w.level : 'None';
-      }
-
-      function relHours(a,b){ return ( (+a)-(+b) )/36e5; }
-
-      function applyWeatherToSchedule(){
-        if(weatherWindows.length===0){ linkageBadge.textContent='Linked to Weather: OFF'; return; }
-        linkageBadge.textContent='Linked to Weather: ON';
-
-        voyageSchedule.sort((x,y)=> +new Date(x.etd) - +new Date(y.etd));
-
-        let lastETA = null;
-        let changes = [];
-
-        for(let i=0;i<voyageSchedule.length;i++){
-          const v = voyageSchedule[i];
-          let etd = new Date(v.etd);
-          let eta = new Date(v.eta);
-          if(lastETA && +etd < +lastETA){
-            const deltaH = Math.ceil(relHours(lastETA, etd));
-            etd = new Date(+etd + deltaH*36e5);
-            eta = new Date(+eta + deltaH*36e5);
-            changes.push(`${v.id}: shifted +${deltaH}h to keep sequence`);
-          }
-
-          const lvlAtETD = findWeatherLevelAt(etd);
-          const lvlAtETA = findWeatherLevelAt(eta);
-
-          if(lvlAtETD==='NoGo'){
-            etd = new Date(+etd + 24*36e5);
-            eta = new Date(+eta + 24*36e5);
-            v.status = 'Delayed';
-            changes.push(`${v.id}: ETD NoGo → +24h`);
-          }else if(lvlAtETA==='NoGo'){
-            eta = new Date(+eta + 12*36e5);
-            v.status = 'Delayed';
-            changes.push(`${v.id}: ETA NoGo → +12h`);
-          }
-
-          v.etd = fmtIso(etd);
-          v.eta = fmtIso(eta);
-          lastETA = eta;
-        }
-
-        if(changes.length){
-          setInfo(`<strong>Weather linked.</strong><br>${changes.map(c=>`• ${c}`).join('<br>')}`, 'warn');
-        }else{
-          setInfo('날씨 연동됨. 변경 사항 없음.');
-        }
-        renderSchedule();
-      }
-
-      function chooseActiveVoyage(now){
-        return voyageSchedule.find(v => v.status==="In Transit" || ((new Date(v.etd)<=now) && (v.status==="Scheduled" || v.status==="Delayed")));
-      }
-
-      function runSimulation(){
-        currentSimDate.setMinutes(currentSimDate.getMinutes() + (1 * speedFactor / 60));
-        timeDisplay.textContent = toLocal(currentSimDate);
-
-        let active = chooseActiveVoyage(currentSimDate);
-        if(active && vesselData.currentVoyageId!==active.id){
-          vesselData.currentVoyageId=active.id; vesselData.progress=0.00;
-        }
-
-        if(active){
-          const etd=new Date(active.etd), eta=new Date(active.eta);
-          const total=eta-etd;
-          if(currentSimDate>=etd && currentSimDate<=eta){
-            if(active.status!=="Delayed") active.status="In Transit";
-            vesselData.status = active.status==="Delayed" ? "In Transit (Delayed)" : "In Transit to AGI";
-            vesselData.progress=(currentSimDate-etd)/total;
-            const [lat,lon]=interpolateOnRoute(vesselData.progress);
-            vesselMarker.setLatLng([lat,lon]);
-          }else if(currentSimDate>eta){
-            if(active.status!=="Completed"){
-              active.status="Completed";
-              vesselMarker.setLatLng(vesselData.route[vesselData.route.length-1]);
-              vesselData.status="Discharging @ AGI";
-              setTimeout(()=>{
-                vesselMarker.setLatLng(vesselData.route[0]);
-                vesselData.status="Ready for Loading @ MW4";
-                updateInfoPanel();
-              }, 4000);
+        if (state.vessel?.currentVoyageId) {
+          const index = state.schedule.findIndex((voyage) => voyage.id === state.vessel.currentVoyageId);
+          if (index >= 0) {
+            const selected = elements.scheduleBody.children[index];
+            const changed = state.vessel.currentVoyageId !== state.lastAutoScrollVoyage;
+            if (selected && (changed || !state.userInteractingWithSchedule)) {
+              selected.scrollIntoView({ behavior: state.lastAutoScrollVoyage ? 'smooth' : 'auto', block: 'center' });
+              state.lastAutoScrollVoyage = state.vessel.currentVoyageId;
             }
           }
         }
+      }
 
-        updateInfoPanel();
+      function focusVoyageOnMap(voyage) {
+        if (!state.map || !voyage) return;
+        const etd = parseISO(voyage.etd);
+        const eta = parseISO(voyage.eta);
+        elements.map.etd.textContent = toLocal(etd);
+        elements.map.eta.textContent = toLocal(eta);
+        if (state.marker) {
+          const el = state.marker.getElement();
+          if (el) {
+            el.classList.add('ring-2', 'ring-emerald-400');
+            setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-400'), 1200);
+          }
+        }
+      }
+
+      function updateMap() {
+        if (!state.map) {
+          state.map = L.map('map').setView([24.7, 54.1], 8);
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap & CARTO' }).addTo(state.map);
+        }
+        if (elements.map.skeleton) {
+          elements.map.skeleton.classList.add('hidden');
+        }
+        if (state.polyline) {
+          state.map.removeLayer(state.polyline);
+        }
+        state.polyline = L.polyline(state.route, { color: '#FBBF24', weight: 3, dashArray: '5,10' }).addTo(state.map);
+        if (!state.marker) {
+          const vesselIcon = L.icon({ iconUrl: 'https://i.imgur.com/G4Am98f.png', iconSize: [35, 35] });
+          state.marker = L.marker(state.route[0], { icon: vesselIcon })
+            .bindTooltip(state.vessel?.name || 'Vessel', { permanent: true, direction: 'top', offset: [0, -18], className: 'leaflet-tooltip' })
+            .addTo(state.map);
+        }
+        state.marker.setLatLng(state.route[0]);
+        state.map.fitBounds(state.polyline.getBounds(), { padding: [20, 20] });
+        rebuildRouteSegments();
+      }
+
+      function populateFromDataset(dataset) {
+        state.timezone = dataset.timezone;
+        state.vessel = {
+          ...dataset.vessel,
+          currentVoyageId: dataset.schedule[0]?.id ?? null,
+          progress: 0,
+        };
+        state.schedule = dataset.schedule;
+        state.weatherWindows = dataset.weatherWindows;
+        state.ports = dataset.ports;
+        state.route = dataset.route;
+        state.events = dataset.events.map((evt) => ({ level: evt.level, message: evt.message, timestamp: evt.timestamp }));
+        elements.header.vessel.textContent = `🛳️ ${state.vessel.name}`;
+        elements.header.status.textContent = state.vessel.status;
+        elements.header.status.className = 'px-2 py-1 rounded-full text-xs bg-emerald-900/40 text-emerald-300';
+        elements.header.timezone.textContent = state.timezone;
+        elements.header.imo.textContent = state.vessel.imo;
+        elements.header.mmsi.textContent = state.vessel.mmsi;
+        state.simulation.now = parseISO(dataset.serverTime) || new Date();
+        renderEventFeed();
+        updateVesselInfo();
+        renderSchedule();
+        updateMap();
+      }
+
+      function checkApiHealth() {
+        guardedFetch(`${API_BASE}/api/health`).then((data) => {
+          const report = data?.report || null;
+          const previousId = state.lastReport?.generatedAt;
+          applyReportStatus(data?.status || 'ok', report);
+          if (report && !report.ok && report.generatedAt !== previousId) {
+            logEvent('warn', '최근 보고 전송에서 일부 채널 실패 감지');
+          }
+        }).catch((error) => {
+          console.error(error);
+          applyReportStatus('offline');
+        });
+      }
+
+      function refreshMarineSnapshot(showToast = false) {
+        const port = state.vessel?.port || 'Jebel Ali';
+        return guardedFetch(`${API_BASE}/api/marine?port=${encodeURIComponent(port)}`).then((snapshot) => {
+          state.marine = snapshot;
+          if (snapshot.hs !== null && snapshot.windKt !== null) {
+            elements.map.badge.textContent = `Hs: ${snapshot.hs.toFixed(2)} m · Wind: ${snapshot.windKt.toFixed(2)} kt`;
+          } else {
+            elements.map.badge.textContent = 'Hs: -- m · Wind: -- kt';
+          }
+          if (snapshot.ioi !== null && snapshot.hs !== null) {
+            elements.map.risk.textContent = `${snapshot.ioi.toFixed(0)} IOI · Hs ${snapshot.hs.toFixed(2)} m`;
+          } else if (snapshot.ioi !== null) {
+            elements.map.risk.textContent = `${snapshot.ioi.toFixed(0)} IOI`;
+          } else {
+            elements.map.risk.textContent = '데이터 수집 중';
+          }
+          renderSchedule();
+          if (showToast) {
+            logEvent('info', `해상 스냅샷 업데이트 (${snapshot.cached ? 'cache' : 'live'})`);
+          }
+        }).catch((error) => {
+          console.error(error);
+          logEvent('warn', '해상 스냅샷 업데이트 실패 – 기존 값 사용');
+        });
+      }
+
+      function startMarineAutoRefresh() {
+        if (state.autoMarineHandle) {
+          clearInterval(state.autoMarineHandle);
+        }
+        state.autoMarineHandle = setInterval(() => refreshMarineSnapshot(true), 5 * 60 * 1000);
+      }
+
+      function chooseActiveVoyage(now) {
+        const date = now.valueOf();
+        return state.schedule.find((voyage) => {
+          const etd = parseISO(voyage.etd);
+          const eta = parseISO(voyage.eta);
+          if (!etd || !eta) return false;
+          return (date >= etd.valueOf() && date <= eta.valueOf()) || voyage.status === 'In Transit';
+        }) || state.schedule[0];
+      }
+
+      function runSimulationTick() {
+        const sim = state.simulation;
+        sim.now = new Date(sim.now.valueOf() + sim.speedFactor * 1000);
+        elements.simMeta.textContent = `${toLocal(sim.now)} · ${state.vessel.status}`;
+        const active = chooseActiveVoyage(sim.now);
+        if (active) {
+          if (state.vessel.currentVoyageId !== active.id) {
+            state.vessel.currentVoyageId = active.id;
+            state.vessel.progress = 0;
+            renderSchedule();
+          }
+          const etd = parseISO(active.etd);
+          const eta = parseISO(active.eta);
+          if (etd && eta) {
+            if (sim.now >= etd && sim.now <= eta) {
+              state.vessel.status = active.status === 'Delayed' ? 'In Transit (Delayed)' : 'In Transit to AGI';
+              const total = eta.valueOf() - etd.valueOf();
+              state.vessel.progress = clamp((sim.now.valueOf() - etd.valueOf()) / total, 0, 1);
+              if (state.marker) {
+                const [lat, lon] = interpolateRoute(state.vessel.progress);
+                state.marker.setLatLng([lat, lon]);
+              }
+            } else if (sim.now > eta && active.status !== 'Completed') {
+              active.status = 'Completed';
+              state.vessel.status = 'Discharging @ AGI';
+              logEvent('info', `${active.id} 도착 – 하역 진행 중`);
+              setTimeout(() => {
+                state.vessel.status = state.vessel.readiness;
+                updateVesselInfo();
+                renderSchedule();
+              }, 5000);
+            }
+          }
+        }
+        updateVesselInfo();
+      }
+
+      function startSimulationLoop() {
+        if (state.simulation.handle) return;
+        state.simulation.handle = setInterval(runSimulationTick, 1000);
+      }
+
+      function stopSimulationLoop() {
+        if (!state.simulation.handle) return;
+        clearInterval(state.simulation.handle);
+        state.simulation.handle = null;
+      }
+
+      function resetSimulation() {
+        stopSimulationLoop();
+        state.simulation.now = new Date('2025-09-28T12:00:00Z');
+        state.vessel.currentVoyageId = state.schedule[0]?.id ?? null;
+        state.vessel.status = state.vessel.readiness;
+        state.vessel.progress = 0;
+        state.weatherLinked = false;
+        elements.linkageBadge.textContent = 'OFF';
+        inputs.toggleWeather.checked = false;
+        state.schedule = state.schedule.map((voyage) => ({ ...voyage, status: 'Scheduled' }));
+        renderSchedule();
+        updateVesselInfo();
+        setAlert('시뮬레이터 시계가 초기화되었습니다.');
+        logEvent('info', '시뮬레이터 초기화 완료');
+        startSimulationLoop();
+      }
+      function applyWeatherWindows() {
+        if (!state.weatherLinked || !state.weatherWindows.length) {
+          elements.linkageBadge.textContent = 'OFF';
+          return;
+        }
+        elements.linkageBadge.textContent = 'ON';
+        const windows = state.weatherWindows.map((window) => ({
+          ...window,
+          start: parseISO(window.start),
+          end: parseISO(window.end),
+        }));
+        const updates = [];
+        let lastEta = null;
+        state.schedule = state.schedule.map((voyage) => {
+          const etd = parseISO(voyage.etd);
+          const eta = parseISO(voyage.eta);
+          if (!etd || !eta) return voyage;
+          let newEtd = new Date(etd);
+          let newEta = new Date(eta);
+          if (lastEta && newEtd < lastEta) {
+            const shiftHours = Math.ceil((lastEta.valueOf() - newEtd.valueOf()) / 36e5);
+            newEtd = new Date(newEtd.valueOf() + shiftHours * 36e5);
+            newEta = new Date(newEta.valueOf() + shiftHours * 36e5);
+            updates.push(`${voyage.id}: sequence shift +${shiftHours}h`);
+          }
+          const conflict = windows.find((win) => win.start && win.end && ((newEtd >= win.start && newEtd <= win.end) || (newEta >= win.start && newEta <= win.end)));
+          if (conflict && (conflict.wave_m >= 2.25 || conflict.wind_kt >= 30 || conflict.vis_km <= 1)) {
+            newEtd = new Date(newEtd.valueOf() + 24 * 36e5);
+            newEta = new Date(newEta.valueOf() + 24 * 36e5);
+            voyage.status = 'Delayed';
+            updates.push(`${voyage.id}: Severe weather window detected → +24h`);
+          }
+          lastEta = newEta;
+          return { ...voyage, etd: newEtd.toISOString(), eta: newEta.toISOString() };
+        });
+        if (updates.length) {
+          setAlert(`<strong>Weather linked.</strong><br>${updates.map((line) => `• ${line}`).join('<br>')}`, 'warn');
+        } else {
+          setAlert('날씨 연동 완료. 변경 사항 없음.');
+        }
         renderSchedule();
       }
 
-      const scheduleInput = document.getElementById('file-schedule');
-      const weatherInput  = document.getElementById('file-weather');
-      const scheduleLabel = document.getElementById('label-schedule');
-      const weatherLabel  = document.getElementById('label-weather');
+      function parseCSV(text) {
+        const rows = text.trim().split(/\r?\n/);
+        const header = rows.shift().split(',').map((cell) => cell.trim());
+        return rows.map((line) => {
+          const cells = line.split(',').map((cell) => cell.trim());
+          const obj = {};
+          header.forEach((key, index) => {
+            obj[key] = cells[index];
+          });
+          return obj;
+        });
+      }
 
-      scheduleLabel.addEventListener('click',()=> scheduleInput.click());
-      weatherLabel.addEventListener('click',()=> weatherInput.click());
+      function addScheduleListeners() {
+        const passive = { passive: true };
+        const markInteraction = () => {
+          state.userInteractingWithSchedule = true;
+          if (state.interactionTimer) clearTimeout(state.interactionTimer);
+          state.interactionTimer = setTimeout(() => {
+            state.userInteractingWithSchedule = false;
+          }, 8000);
+        };
+        ['wheel', 'touchstart', 'touchmove', 'pointerdown', 'keydown', 'scroll'].forEach((evt) => {
+          elements.scheduleContainer.addEventListener(evt, markInteraction, passive);
+        });
+      }
 
-      scheduleInput.addEventListener('change', (e)=> {
-        if(e.target.files.length===0) return;
-        const f = e.target.files[0];
+      addScheduleListeners();
+
+      function openModal(modal) {
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        modal.setAttribute('aria-hidden', 'false');
+        const focusable = modal.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusable.length) {
+          focusable[0].focus();
+        }
+      }
+
+      function closeModal(modal) {
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        modal.setAttribute('aria-hidden', 'true');
+      }
+
+      [elements.assistantModal, elements.briefingModal].forEach((modal) => {
+        modal.addEventListener('click', (event) => {
+          if (event.target === modal) closeModal(modal);
+        });
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeModal(elements.assistantModal);
+          closeModal(elements.briefingModal);
+        }
+      });
+
+      function renderAttachments() {
+        if (!state.pendingAttachments.length) {
+          elements.assistantAttachments.innerHTML = '<div class="text-slate-500 text-[11px]">첨부된 파일이 없습니다. 스크린 캡처 붙여넣기를 지원합니다.</div>';
+          return;
+        }
+        elements.assistantAttachments.innerHTML = state.pendingAttachments.map((file, index) => {
+          const isImage = (file.type || '').startsWith('image/');
+          const preview = isImage ? `<img src="${URL.createObjectURL(file)}" alt="${file.name} preview" class="w-12 h-12 object-cover rounded-md border border-slate-700" onload="URL.revokeObjectURL(this.src)">`
+            : '<span class="w-12 h-12 flex items-center justify-center rounded-md bg-slate-900/70 border border-slate-700 text-lg">📄</span>';
+          const sizeKb = file.size ? (file.size / 1024).toFixed(2) : '0.00';
+          return `<div class="flex items-center gap-3 bg-slate-900/70 px-3 py-2 rounded-lg border border-slate-800/70">
+              ${preview}
+              <div class="flex-1 min-w-0">
+                <p class="text-slate-200 text-sm truncate">${file.name}</p>
+                <p class="text-slate-500 text-[11px]">${file.type || 'unknown'} • ${sizeKb} KB</p>
+              </div>
+              <button data-index="${index}" class="text-rose-300 hover:text-rose-200 text-xs remove-attachment">Remove</button>
+            </div>`;
+        }).join('');
+        elements.assistantAttachments.querySelectorAll('.remove-attachment').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            const idx = Number(event.currentTarget.getAttribute('data-index'));
+            state.pendingAttachments.splice(idx, 1);
+            renderAttachments();
+          });
+        });
+      }
+
+      function addAttachmentsFromFileList(list) {
+        const files = Array.from(list || []);
+        if (!files.length) return;
+        state.pendingAttachments = state.pendingAttachments.concat(files);
+        renderAttachments();
+      }
+
+      renderAttachments();
+      function callAssistant(prompt, options = {}) {
+        const attachments = options.attachments ?? state.pendingAttachments;
+        const persistHistory = options.persist ?? true;
+        const formData = new FormData();
+        formData.append('prompt', prompt);
+        formData.append('history', JSON.stringify(state.assistantHistory));
+        formData.append('model', inputs.assistantModel.value);
+        attachments.forEach((file) => formData.append('files', file, file.name || 'attachment'));
+        return fetch(`${API_BASE}/api/assistant`, { method: 'POST', body: formData }).then((res) => {
+          if (!res.ok) throw new Error('Assistant call failed');
+          return res.json();
+        }).then((data) => {
+          if (persistHistory) {
+            state.assistantHistory.push({ role: 'user', content: prompt });
+            state.assistantHistory.push({ role: 'assistant', content: data.answer });
+          }
+          if (!options.attachments) {
+            state.pendingAttachments = [];
+            renderAttachments();
+            inputs.assistantFile.value = '';
+          }
+          elements.assistantUsage.textContent = `Last response model: ${inputs.assistantModel.value}`;
+          return data.answer;
+        });
+      }
+
+      function runRiskScan() {
+        setAlert('AI 위험 스캔 실행 중...', 'info');
+        return callAssistant('risk summary for upcoming voyages', { persist: false }).then((answer) => {
+          setAlert(answer.replace(/\n/g, '<br>'), 'warn');
+        }).catch((error) => {
+          console.error(error);
+          setAlert(`AI 위험 스캔 실패: ${error.message}`, 'danger');
+        });
+      }
+
+      function exportSchedule() {
+        const header = ['id', 'cargo', 'etd', 'eta', 'status', 'ioi'];
+        const rows = state.schedule.map((voyage) => header.map((key) => voyage[key] ?? '').join(','));
+        const csv = [header.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'schedule-export.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        logEvent('info', '스케줄 CSV 내보내기 완료');
+      }
+
+      buttons.export.addEventListener('click', exportSchedule);
+
+      buttons.quickGo.addEventListener('click', () => {
+        guardedFetch(`${API_BASE}/api/vessel/actions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'quick-go' }),
+        }).then((data) => {
+          setAlert(data.message);
+          logEvent('info', data.message);
+        }).catch((error) => setAlert(`Quick Go 실패: ${error.message}`, 'danger'));
+      });
+
+      buttons.delay.addEventListener('click', () => {
+        guardedFetch(`${API_BASE}/api/vessel/actions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delay-24h' }),
+        }).then((data) => {
+          setAlert(data.message, 'warn');
+          logEvent('warn', data.message);
+        }).catch((error) => setAlert(`Delay 실패: ${error.message}`, 'danger'));
+      });
+
+      buttons.recalc.addEventListener('click', () => {
+        guardedFetch(`${API_BASE}/api/vessel/actions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'recalculate' }),
+        }).then((data) => {
+          setAlert(data.message);
+          logEvent('info', data.message);
+          refreshMarineSnapshot(true);
+        }).catch((error) => setAlert(`Recalculate 실패: ${error.message}`, 'danger'));
+      });
+
+      buttons.briefing.addEventListener('click', () => {
+        elements.modalContent.textContent = '생성 중...';
+        openModal(elements.briefingModal);
+        const payload = {
+          current_time: state.simulation.now.toISOString(),
+          vessel_name: state.vessel?.name,
+          vessel_status: state.vessel?.status,
+          current_voyage: state.vessel?.currentVoyageId,
+          schedule: state.schedule,
+          weather_windows: state.weatherWindows,
+          model: inputs.assistantModel.value,
+        };
+        fetch(`${API_BASE}/api/briefing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then((res) => {
+          if (!res.ok) throw new Error('Briefing generation failed');
+          return res.json();
+        }).then((data) => {
+          elements.modalContent.innerHTML = data.briefing.replace(/\n/g, '<br>');
+        }).catch((error) => {
+          console.error(error);
+          elements.modalContent.textContent = `Briefing unavailable: ${error.message}`;
+        });
+      });
+
+      if (buttons.dispatchReport) {
+        buttons.dispatchReport.addEventListener('click', () => {
+          buttons.dispatchReport.disabled = true;
+          buttons.dispatchReport.classList.add('opacity-60');
+          guardedFetch(`${API_BASE}/api/report`).then((data) => {
+            applyReportStatus(data?.ok ? 'ok' : 'degraded', data || null);
+            const level = data?.ok ? 'info' : 'warn';
+            const msg = data?.ok ? '일일 리포트 전송 완료' : '일일 리포트 전송 일부 실패';
+            logEvent(level, msg);
+          }).catch((error) => {
+            console.error(error);
+            logEvent('error', `일일 리포트 전송 실패: ${error.message}`);
+            applyReportStatus('degraded', state.lastReport);
+          }).finally(() => {
+            buttons.dispatchReport.disabled = false;
+            buttons.dispatchReport.classList.remove('opacity-60');
+          });
+        });
+      }
+
+      buttons.modalClose.addEventListener('click', () => closeModal(elements.briefingModal));
+
+      buttons.assistantOpen.addEventListener('click', () => openModal(elements.assistantModal));
+      buttons.assistantClose.addEventListener('click', () => closeModal(elements.assistantModal));
+
+      buttons.assistantAttach.addEventListener('click', () => inputs.assistantFile.click());
+      inputs.assistantFile.addEventListener('change', (event) => {
+        addAttachmentsFromFileList(event.target.files || []);
+        event.target.value = '';
+      });
+
+      buttons.assistantReset.addEventListener('click', () => {
+        state.assistantHistory = [];
+        state.pendingAttachments = [];
+        renderAttachments();
+        elements.assistantConversation.innerHTML = '<div class="text-slate-400">무엇을 도와드릴까요? (예: "다음 3일 스케줄 요약")<br/>첨부 버튼으로 캡처/문서를 추가하면 자동 분석됩니다.</div>';
+        elements.assistantUsage.textContent = '';
+      });
+
+      document.getElementById('assistant-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const question = inputs.assistantInput.value.trim();
+        if (!question) return;
+        const userBubble = document.createElement('div');
+        userBubble.className = 'text-right';
+        userBubble.innerHTML = `<span class="bg-purple-800/80 p-2 rounded-lg inline-block">${question}</span>`;
+        elements.assistantConversation.appendChild(userBubble);
+        inputs.assistantInput.value = '';
+        elements.assistantConversation.scrollTop = elements.assistantConversation.scrollHeight;
+        callAssistant(question).then((answer) => {
+          const botBubble = document.createElement('div');
+          botBubble.className = 'text-left';
+          botBubble.innerHTML = `<span class="bg-slate-800 p-2 rounded-lg inline-block">${answer.replace(/\n/g, '<br>')}</span>`;
+          elements.assistantConversation.appendChild(botBubble);
+          elements.assistantConversation.scrollTop = elements.assistantConversation.scrollHeight;
+        }).catch((error) => {
+          const errorBubble = document.createElement('div');
+          errorBubble.className = 'text-left text-rose-300';
+          errorBubble.textContent = error.message;
+          elements.assistantConversation.appendChild(errorBubble);
+        });
+      });
+
+      inputs.fileSchedule.addEventListener('change', (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
         const reader = new FileReader();
         reader.onload = () => {
-          try{
+          try {
             let rows;
-            if(f.name.toLowerCase().endsWith('.json')){
-              const data = JSON.parse(reader.result);
-              if(!Array.isArray(data)) throw new Error('JSON must be an array');
-              rows = data;
+            if (file.name.toLowerCase().endsWith('.json')) {
+              rows = JSON.parse(reader.result);
             } else {
               rows = parseCSV(reader.result);
             }
-            const normalized = rows.map(r=> {
-              const id = r.id || r.Voyage || r.voyage || r.trip || '';
-              const cargo = r.cargo || r.Cargo || '';
-              const etd = r.etd || r.ETD || r.departure || '';
-              const eta = r.eta || r.ETA || r.arrival || '';
-              const status = r.status || r.Status || 'Scheduled';
-              const etdDt = parseISO(etd), etaDt = parseISO(eta);
-              if(!id || !cargo || !etdDt || !etaDt) throw new Error('Missing required fields (id,cargo,etd,eta)');
-              return { id:String(id).trim(), cargo:String(cargo).trim(), etd:fmtIso(etdDt), eta:fmtIso(etaDt), status:String(status).trim() };
+            state.schedule = rows.map((row) => {
+              const id = row.id || row.voyage || row.Voyage;
+              const cargo = row.cargo || row.Cargo;
+              const etd = row.etd || row.ETD;
+              const eta = row.eta || row.ETA;
+              const status = row.status || 'Scheduled';
+              if (!id || !cargo || !etd || !eta) throw new Error('Missing required fields (id,cargo,etd,eta)');
+              return {
+                id: String(id).trim(),
+                cargo: String(cargo).trim(),
+                etd: parseISO(etd)?.toISOString() || new Date().toISOString(),
+                eta: parseISO(eta)?.toISOString() || new Date().toISOString(),
+                status: String(status).trim(),
+                swellFt: safeNumber(row.swellFt ?? row.swell_ft, 3.0),
+                windKt: safeNumber(row.windKt ?? row.wind_kt, 15.0),
+                ioi: safeNumber(row.ioi, 65),
+              };
             });
-            voyageSchedule = normalized.sort((a,b)=> +new Date(a.etd)-+new Date(b.etd));
-            scheduleLabel.textContent = `Loaded: ${f.name}`;
-            setInfo(`스케줄 ${normalized.length}건 로드 완료.`, 'info');
+            labels.schedule.textContent = `Loaded: ${file.name}`;
+            setAlert(`스케줄 ${state.schedule.length}건 로드 완료.`);
             renderSchedule();
-          }catch(err){
-            console.error(err);
-            setInfo(`⚠️ 스케줄 파일 오류: ${err.message}`, 'danger');
+          } catch (error) {
+            console.error(error);
+            setAlert(`⚠️ 스케줄 파일 오류: ${error.message}`, 'danger');
           }
         };
-        reader.readAsText(f);
+        reader.readAsText(file);
       });
 
-      weatherInput.addEventListener('change', (e)=> {
-        if(e.target.files.length===0) return;
-        const f = e.target.files[0];
-        const reader = new FileReader();
-        reader.onload = ()=> {
-          try{
-            const rows = parseCSV(reader.result);
-            buildWeatherWindows(rows);
-            weatherLabel.textContent = `Loaded: ${f.name}`;
-            weatherLinked = true;
-            applyWeatherToSchedule();
-          }catch(err){
-            console.error(err);
-            setInfo(`⚠️ 날씨 파일 오류: ${err.message}`, 'danger');
-          }
-        };
-        reader.readAsText(f);
-      });
-
-      const briefingModal=document.getElementById('briefing-modal');
-      const assistantModal=document.getElementById('assistant-modal');
-      const modalTitle=document.getElementById('modal-title');
-      const modalContent=document.getElementById('modal-content');
-
-      function openModal(el){ 
-        el.classList.remove('opacity-0','pointer-events-none'); 
-        el.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('modal-open'); 
-        // Focus management
-        const focusableElements = el.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        if(focusableElements.length > 0) {
-          focusableElements[0].focus();
-        }
-      }
-      function closeModal(el){ 
-        el.classList.add('opacity-0','pointer-events-none'); 
-        el.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('modal-open'); 
-      }
-      [briefingModal,assistantModal].forEach(m=> m.addEventListener('click', e=>{ if(e.target===m) closeModal(m); }));
-      document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ [briefingModal,assistantModal].forEach(closeModal); } });
-
-      function renderAttachmentList(){
-        if(pendingAttachments.length===0){
-          assistantAttachments.innerHTML = '<div class="text-slate-500">No attachments selected.</div>';
+      inputs.fileWeather.addEventListener('change', (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const isImage = (file.type && file.type.startsWith('image/')) || /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name);
+        if (isImage) {
+          labels.weather.textContent = 'Analyzing screenshot...';
+          labels.weather.classList.add('animate-pulse');
+          callAssistant('weather insight from screenshot', { attachments: [file], persist: false }).then((answer) => {
+            elements.analysisContent.innerHTML = answer.replace(/\n/g, '<br>');
+            elements.analysisPanel.classList.remove('hidden');
+            setAlert('스크린샷 분석 완료. 리스크 모니터링 활성화.', 'warn');
+          }).catch((error) => {
+            console.error(error);
+            elements.analysisPanel.classList.add('hidden');
+            elements.analysisContent.textContent = '';
+            setAlert(`⚠️ 스크린샷 분석 실패: ${error.message}`, 'danger');
+          }).finally(() => {
+            labels.weather.classList.remove('animate-pulse');
+            labels.weather.textContent = `Loaded: ${file.name}`;
+          });
           return;
         }
-        assistantAttachments.innerHTML = pendingAttachments.map((file,idx)=> {
-          return `<div class="flex justify-between items-center bg-slate-900/80 px-2 py-1 rounded">
-                    <span class="truncate max-w-[14rem]">${file.name}</span>
-                    <button data-index="${idx}" class="text-rose-300 hover:text-rose-400 remove-attachment">Remove</button>
-                  </div>`;
-        }).join('');
-        assistantAttachments.querySelectorAll('.remove-attachment').forEach(btn=> {
-          btn.addEventListener('click',(ev)=> {
-            const idx = Number(ev.target.getAttribute('data-index'));
-            pendingAttachments.splice(idx,1);
-            renderAttachmentList();
-          });
-        });
-      }
-
-      assistantAttachments.innerHTML = '<div class="text-slate-500">No attachments selected.</div>';
-
-      document.getElementById('assistant-attach-btn').addEventListener('click', ()=> assistantFileInput.click());
-      assistantFileInput.addEventListener('change', (event)=> {
-        pendingAttachments = Array.from(event.target.files || []);
-        renderAttachmentList();
-      });
-
-      document.getElementById('assistant-reset').addEventListener('click', ()=> {
-        assistantHistory = [];
-        assistantConversation.innerHTML = '<div class="text-slate-400">무엇을 도와드릴까요? (예: “다음 3일 스케줄 요약”)</div>';
-        assistantUsage.textContent='';
-      });
-
-      async function callAssistant(prompt, attachments){
-        const formData = new FormData();
-        formData.append('prompt', prompt);
-        formData.append('history', JSON.stringify(assistantHistory));
-        formData.append('model', assistantModelSelect.value);
-        attachments.forEach(file=> formData.append('files', file, file.name));
-        const res = await fetch(`${API_BASE}/api/assistant`, { method:'POST', body: formData });
-        if(!res.ok){
-          const text = await res.text();
-          throw new Error(text || 'Assistant call failed');
-        }
-        const data = await res.json();
-        assistantHistory.push({role:'user', content: prompt});
-        assistantHistory.push({role:'assistant', content: data.answer});
-        assistantUsage.textContent = `Last response model: ${assistantModelSelect.value}`;
-        return data.answer;
-      }
-
-      async function fetchBriefing(){
-        modalTitle.textContent = '✨ Daily Briefing';
-        modalContent.innerHTML = '생성 중...';
-        openModal(briefingModal);
-        const payload = {
-          current_time: currentSimDate.toISOString(),
-          vessel_name: vesselData.name,
-          vessel_status: vesselData.status,
-          current_voyage: vesselData.currentVoyageId,
-          schedule: voyageSchedule,
-          weather_windows: weatherWindows.map(w=>({
-            start: w.start ? w.start.toISOString?.() || w.start : w.start,
-            end: w.end ? w.end.toISOString?.() || w.end : w.end,
-            level: w.level,
-            waveM: w.waveM,
-            windKt: w.windKt,
-            visKm: w.visKm
-          }))
-        };
-        try{
-          const res = await fetch(`${API_BASE}/api/briefing`, {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify(payload)
-          });
-          if(!res.ok) throw new Error(await res.text());
-          const data = await res.json();
-          modalContent.innerHTML = data.briefing.replace(/\n/g,'<br>');
-        }catch(err){
-          console.error(err);
-          const cur = voyageSchedule.find(v=>v.id===vesselData.currentVoyageId);
-          const fallback = `현재 시각 ${toLocal(currentSimDate)}.\n진행 항차: ${cur?.id || 'N/A'} / 화물: ${cur?.cargo || 'N/A'} / 상태: ${vesselData.status}.`;
-          modalContent.innerHTML = `${fallback.replace(/\n/g,'<br>')}<br><br><span class="text-rose-300">AI Briefing unavailable: ${err.message}</span>`;
-        }
-      }
-
-      async function runRiskScan(){
-        const prompt = `다음 일정과 기상창을 기반으로 3가지 위험 시나리오와 대응 권고를 bullet로 정리해줘.\n일정: ${JSON.stringify(voyageSchedule)}\n기상: ${JSON.stringify(weatherWindows)}`;
-        setInfo('AI 위험 스캔 실행 중...', 'info');
-        try{
-          const answer = await callAssistant(prompt, []);
-          setInfo(answer.replace(/\n/g,'<br>'), 'warn');
-        }catch(err){
-          setInfo(`AI 위험 스캔 실패: ${err.message}`, 'danger');
-        }
-      }
-
-      document.getElementById('briefing-btn').addEventListener('click', fetchBriefing);
-      document.getElementById('btn-ai-risk').addEventListener('click', runRiskScan);
-      document.getElementById('close-modal-btn').addEventListener('click', ()=>closeModal(briefingModal));
-      document.getElementById('assistant-btn').addEventListener('click', ()=>openModal(assistantModal));
-      document.getElementById('close-assistant-btn').addEventListener('click', ()=>closeModal(assistantModal));
-
-      document.getElementById('assistant-form').addEventListener('submit', async (e)=> {
-        e.preventDefault();
-        const input=document.getElementById('assistant-input');
-        const q=input.value.trim(); if(!q) return;
-        assistantConversation.innerHTML += `<div class="text-right"><span class="bg-purple-800/80 p-2 rounded-lg inline-block">${q}</span></div>`;
-        input.value='';
-        assistantConversation.scrollTop=assistantConversation.scrollHeight;
-        try{
-          const ans = await callAssistant(q, pendingAttachments);
-          assistantConversation.innerHTML += `<div class="text-left"><span class="bg-slate-800 p-2 rounded-lg inline-block">${ans.replace(/\n/g,'<br>')}</span></div>`;
-          assistantConversation.scrollTop=assistantConversation.scrollHeight;
-          pendingAttachments = [];
-          assistantFileInput.value = '';
-          renderAttachmentList();
-        }catch(err){
-          assistantConversation.innerHTML += `<div class="text-left text-rose-300">${err.message}</div>`;
-          assistantConversation.scrollTop=assistantConversation.scrollHeight;
-        }
-      });
-
-      document.getElementById('btn-reset').addEventListener('click', ()=> {
-        currentSimDate = new Date("2025-09-28T12:00:00Z");
-        vesselData.currentVoyageId = null;
-        vesselData.status = "Ready @ MW4";
-        setInfo('시뮬레이션 시계가 초기화되었습니다.');
-      });
-
-      // Marine data functions
-      async function updateMarineForLeg(portName) {
-        // 워커로 오프로드
-        const snap = await fetchMarineAndIOIInWorker(portName);
-        if (snap && snap.hs != null && snap.windKt != null) {
-          marineBadge.textContent = `Hs: ${snap.hs.toFixed(2)} m · Wind: ${Math.round(snap.windKt)} kt`;
-        } else {
-          marineBadge.textContent = `Marine: n/a`;
-        }
-        return snap;
-      }
-
-      // ===== Worker 생성 (Blob URL) : IOI 계산 + Marine fetch 오프로드 =====
-      const workerCode = `
-        self.addEventListener('message', async (e) => {
-          const { type, payload } = e.data || {};
-          if (type === 'marine+ioi') {
-            const { port, coords, RULE } = payload;
-            try {
-              const params = new URLSearchParams({
-                latitude: String(coords.lat),
-                longitude: String(coords.lon),
-                hourly: ['wave_height','wind_speed_10m','swell_wave_period'].join(','),
-                timezone: 'auto'
-              });
-              const url = 'https://marine-api.open-meteo.com/v1/marine?' + params.toString();
-              const r = await fetch(url);
-              const j = await r.json();
-              const idx = 0;
-              const hs = j?.hourly?.wave_height?.[idx] ?? null;
-              const wsms = j?.hourly?.wind_speed_10m?.[idx] ?? null;
-              const sp = j?.hourly?.swell_wave_period?.[idx] ?? null;
-              const windKt = wsms != null ? (wsms * 1.94384) : null;
-              // IOI 계산 (워커쪽 동일 로직)
-              function ioiCalc(hs, windKt, sp, RULE){
-                const hsScore = (hs==null)?0.5:(hs<=RULE.hs_caution?1:hs>=RULE.hs_nogo?0:1-((hs-RULE.hs_caution)/(RULE.hs_nogo-RULE.hs_caution)));
-                const wScore  = (windKt==null)?0.5:(windKt<=RULE.wind_caution?1:windKt>=RULE.wind_nogo?0:1-((windKt-RULE.wind_caution)/(RULE.wind_nogo-RULE.wind_caution)));
-                const spMin=6, spMax=12; const s = Math.max(spMin, Math.min(spMax, (sp ?? 8)));
-                const swellScore = (s-spMin)/(spMax-spMin);
-                const score = 0.5*hsScore + 0.35*wScore + 0.15*swellScore;
-                return Math.round(score*100);
-              }
-              const ioi = ioiCalc(hs, windKt, sp, RULE);
-              self.postMessage({ type:'marine+ioi:done', payload:{ port, hs, windKt, sp, ioi }});
-            } catch (err) {
-              self.postMessage({ type:'marine+ioi:error', payload:{ port, error: String(err) }});
-            }
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const rows = parseCSV(reader.result);
+            state.weatherWindows = rows.map((row) => ({
+              start: row.start || row.Start,
+              end: row.end || row.End,
+              wave_m: safeNumber(row.wave_m ?? row.wave, 1.2),
+              wind_kt: safeNumber(row.wind_kt ?? row.wind, 15.0),
+              vis_km: safeNumber(row.vis_km ?? row.visibility, 10.0),
+              summary: row.summary || row.note || 'Imported window',
+            }));
+            labels.weather.textContent = `Loaded: ${file.name}`;
+            state.weatherLinked = inputs.toggleWeather.checked;
+            applyWeatherWindows();
+            renderSchedule();
+          } catch (error) {
+            console.error(error);
+            setAlert(`⚠️ 날씨 파일 오류: ${error.message}`, 'danger');
           }
-        });
-      `;
-      const workerUrl = URL.createObjectURL(new Blob([workerCode], {type:'text/javascript'}));
-      const marineWorker = new Worker(workerUrl, { type:'module' });
-      const pendingIOI = new Map(); // port -> Promise resolvers
-      marineWorker.addEventListener('message', (e)=> {
-        const { type, payload } = e.data || {};
-        if (type === 'marine+ioi:done') {
-          const { port, hs, windKt, sp, ioi } = payload;
-          const resolver = pendingIOI.get(port);
-          if (resolver) { resolver.resolve({ hs, windKt, swellPeriod: sp, ioi }); pendingIOI.delete(port); }
-        } else if (type === 'marine+ioi:error') {
-          const resolver = pendingIOI.get(payload.port);
-          if (resolver) { resolver.resolve(null); pendingIOI.delete(payload.port); }
+        };
+        reader.readAsText(file);
+      });
+
+      inputs.toggleWeather.addEventListener('change', (event) => {
+        state.weatherLinked = event.target.checked;
+        applyWeatherWindows();
+      });
+
+      buttons.aiRisk.addEventListener('click', runRiskScan);
+      buttons.resetSim.addEventListener('click', resetSimulation);
+
+      elements.assistantDropzone.addEventListener('dragenter', (event) => {
+        event.preventDefault();
+        elements.assistantDropzone.classList.add('drop-active');
+      });
+      elements.assistantDropzone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+      });
+      elements.assistantDropzone.addEventListener('dragleave', () => {
+        elements.assistantDropzone.classList.remove('drop-active');
+      });
+      elements.assistantDropzone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        elements.assistantDropzone.classList.remove('drop-active');
+        addAttachmentsFromFileList(event.dataTransfer?.files || []);
+      });
+
+      document.addEventListener('paste', (event) => {
+        if (elements.assistantModal.getAttribute('aria-hidden') === 'true') return;
+        const items = event.clipboardData?.items || [];
+        const files = [];
+        for (const item of items) {
+          if (item.kind === 'file') {
+            const file = item.getAsFile();
+            if (file) files.push(file);
+          }
+        }
+        if (files.length) {
+          event.preventDefault();
+          addAttachmentsFromFileList(files);
         }
       });
-      function fetchMarineAndIOIInWorker(portName) {
-        const coords = portCoords[portName];
-        if (!coords) return Promise.resolve(null);
-        return new Promise((resolve)=> {
-          pendingIOI.set(portName, { resolve });
-          marineWorker.postMessage({ type:'marine+ioi', payload: { port: portName, coords, RULE }});
 
+      function bootstrap() {
+        checkApiHealth();
+        guardedFetch(`${API_BASE}/api/vessel`).then((dataset) => {
+          populateFromDataset(dataset);
+          refreshMarineSnapshot().then(() => startMarineAutoRefresh());
+          startSimulationLoop();
+          setAlert('대시보드가 초기화되었습니다.');
+        }).catch((error) => {
+          console.error(error);
+          setAlert(`데이터 로드 실패: ${error.message}`, 'danger');
         });
       }
+
+      bootstrap();
     });
   </script>
 </body>
